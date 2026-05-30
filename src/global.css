@@ -14,6 +14,7 @@
   --border-hover: #d1d5db;
   --danger: #dc3545;
   --danger-hover: #bd2130;
+  
   /* Sombra suave y difusa de alta gama */
   --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03); 
   --transition-speed: 0.25s;
@@ -39,7 +40,7 @@
 }
 
 /* ==========================================================================
-   RESETEO GLOBAL, TIPOGRAFÍA Y INTERACTIVIDAD FLUIDA
+   RESETEO GLOBAL, TIPOGRAFÍA E INTERACTIVIDAD FLUIDA
    ========================================================================== */
 * {
   box-sizing: border-box;
@@ -157,4 +158,20 @@ button:disabled {
   cursor: not-allowed; 
   transform: none !important; 
   box-shadow: none !important;
+}
+
+/* ==========================================================================
+   UTILIDADES Y ANIMACIONES DE SOPORTE (SKELETONS Y SPINNERS)
+   ========================================================================== */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

@@ -1,60 +1,50 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { db } from '../firebase';
-import { 
-  collection, query, orderBy, onSnapshot, addDoc, 
-  deleteDoc, doc, serverTimestamp, updateDoc 
-} from 'firebase/firestore';
-import { 
-  Calendar, User, ArrowUpRight, Clock, ShieldAlert, 
-  X, Search, Plus, Trash2, Edit2, Loader2, Image as ImageIcon 
-} from 'lucide-react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { Calendar, ArrowUpRight, ShieldAlert, Search, Image as ImageIcon, Bookmark, Layers } from 'lucide-react';
 
-/**
- * NOTAS DE DISEÑO:
- * Este componente utiliza un enfoque de "Single File Architecture" 
- * para mantener la portabilidad. Incluye:
- * 1. Sistema de filtrado en tiempo real.
- * 2. CRUD completo (Create, Read, Delete).
- * 3. Manejo de estados de carga (Skeleton).
- * 4. Interfaz responsiva.
- */
-
-// --- CONFIGURACIÓN DE TEMA ---
-const theme = {
-  bg: '#09090b',
-  card: '#111114',
-  border: '#1f1f24',
-  accent: '#3b82f6',
-  textMain: '#ffffff',
-  textMuted: '#6b7280',
-  danger: '#ef4444'
-};
-
-// --- COMPONENTES AUXILIARES INTERNOS ---
-
-// 1. SKELETON LOADER (Mejora la percepción de velocidad)
+// --- SKELETON LOADER RESPONSIVO EN CUADRÍCULA ---
 const SkeletonLoader = () => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '25px' }}>
+  <div style={{ 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+    gap: '24px' 
+  }}>
     {[1, 2, 3].map(i => (
-      <div key={i} style={{ height: '350px', background: '#111114', borderRadius: '16px', border: `1px solid ${theme.border}`, animation: 'pulse 1.5s infinite' }} />
+      <div 
+        key={i} 
+        style={{ 
+          height: '380px', 
+          background: 'var(--bg-secondary)', 
+          borderRadius: '24px', 
+          border: '1px solid var(--border)', 
+          animation: 'pulse-news 1.5s infinite ease-in-out' 
+        }} 
+      />
     ))}
-    <style>{`@keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 0.3; } 100% { opacity: 0.6; } }`}</style>
+    <style>{`
+      @keyframes pulse-news { 
+        0%, 100% { opacity: 0.6; } 
+        50% { opacity: 0.25; } 
+      }
+    `}</style>
   </div>
 );
 
-// 2. MODAL DE LECTURA / EDICIÓN
-const NewsModal = ({ noticia, onClose, isEditMode = false }) => {
-  if (!noticia) return null;
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
-      <div style={{ background: theme.card, maxWidth: '700px', width: '100%', borderRadius: '20px', border: `1px solid ${theme.border}`, padding: '40px', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} /></button>
-        {noticia.multimedia && <img src={noticia.multimedia} style={{ width: '100%', borderRadius: '12px', marginBottom: '20px' }} />}
-        <h2 style={{ fontSize: '32px', marginBottom: '15px', color: theme.textMain }}>{noticia.titulo}</h2>
-        <p style={{ color: theme.textMuted, lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>{noticia.descripcion}</p>
-      </div>
-    </div>
-  );
+// --- FUNCIÓN EXTRACTORA DE IMÁGENES ANTIFALLOS ---
+const obtenerFotoNoticia = (data) => {
+  if (!data) return null;
+  
+  const directa = data.imagen || data.urlImagen || data.imageUrl || data.multimedia || data.url;
+  if (directa) return directa;
+
+  for (const clave in data) {
+    if (typeof data[clave] === 'string' && (data[clave].startsWith('http://') || data[clave].startsWith('https://'))) {
+      return data[clave];
+    }
+  }
+  return null;
 };
 
 // --- COMPONENTE PRINCIPAL ---
@@ -62,122 +52,270 @@ export default function Noticias() {
   const [noticias, setNoticias] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
-  const [noticiaAbierta, setNoticiaAbierta] = useState(null);
-  
-  // Estado para el panel de administración (puedes vincularlo a un Auth)
-  const [isAdmin] = useState(true); // Cambiar a false en producción real
+  const [favoritos, setFavoritos] = useState([]);
+  const [filtroActivo, setFiltroActivo] = useState('todas'); // 'todas' o 'guardadas'
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    
+    // Inicializar favoritos locales reales desde el almacenamiento local
+    const listaFavs = JSON.parse(localStorage.getItem('noticias_favoritas') || '[]');
+    setFavoritos(listaFavs);
+    
+    // Consulta reactiva en tiempo real a Firestore
     const q = query(collection(db, 'noticias'), orderBy('fecha', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-      setNoticias(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setNoticias(snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          fotoDefinitiva: obtenerFotoNoticia(data)
+        };
+      }));
+      setCargando(false);
+    }, (error) => {
+      console.error("Error al suscribirse a noticias:", error);
       setCargando(false);
     });
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      unsub();
+    };
   }, []);
 
-  // --- LÓGICA DE FILTRADO (Memoizada para rendimiento) ---
+  // --- CONTROLADOR DE GUARDADO/MARCADOR PERSISTENTE ---
+  const toggleBookmark = (e, id) => {
+    e.preventDefault(); // Detiene la navegación del Link contenedor
+    e.stopPropagation(); // Evita que el evento escale en el árbol del DOM
+
+    let nuevosFavs = [...favoritos];
+    if (nuevosFavs.includes(id)) {
+      nuevosFavs = nuevosFavs.filter(favId => favId !== id);
+    } else {
+      nuevosFavs.push(id);
+    }
+
+    setFavoritos(nuevosFavs);
+    localStorage.setItem('noticias_favoritas', JSON.stringify(nuevosFavs));
+  };
+
+  // --- FILTRADO MULTINIVEL OPTIMIZADO EN MEMORIA ---
   const noticiasFiltradas = useMemo(() => {
-    return noticias.filter(n => 
-      n.titulo.toLowerCase().includes(busqueda.toLowerCase()) || 
-      n.descripcion.toLowerCase().includes(busqueda.toLowerCase())
-    );
-  }, [noticias, busqueda]);
+    const busquedaLimpia = busqueda.toLowerCase().trim();
+    return noticias.filter(n => {
+      // Discriminador por pestaña activa (Todas vs Guardadas)
+      if (filtroActivo === 'guardadas' && !favoritos.includes(n.id)) {
+        return false;
+      }
+      // Discriminador por caja de búsqueda de texto
+      return (
+        (n.titulo || '').toLowerCase().includes(busquedaLimpia) || 
+        (n.descripcion || n.contenido || '').toLowerCase().includes(busquedaLimpia)
+      );
+    });
+  }, [noticias, busqueda, filtroActivo, favoritos]);
 
   const formatearFecha = (data) => {
-    if (!data) return "";
+    if (!data) return 'Reciente';
     const date = data.toDate ? data.toDate() : new Date(data);
     return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("¿Estás seguro de eliminar esta noticia?")) {
-      await deleteDoc(doc(db, 'noticias', id));
-    }
-  };
-
   return (
-    <div style={{ maxWidth: '1140px', margin: '0 auto', padding: '40px 20px', color: theme.textMain }}>
-      <NewsModal noticia={noticiaAbierta} onClose={() => setNoticiaAbierta(null)} />
-
-      {/* --- CABECERA --- */}
-      <div style={{ marginBottom: '50px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div>
-          <h1 style={{ fontSize: '48px', fontWeight: '800', letterSpacing: '-1px' }}>Crónicas & <span style={{ color: theme.accent }}>Anuncios</span></h1>
-          <p style={{ color: theme.textMuted, marginTop: '10px' }}>Canal oficial de actualizaciones y comunicados del staff.</p>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '32px 16px' : '50px 24px', minHeight: '80vh', boxSizing: 'border-box' }}>
+      
+      {/* --- CABECERA Y CAJA DE BÚSQUEDA --- */}
+      <div style={{ marginBottom: '36px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
+        <div style={{ textAlign: isMobile ? 'center' : 'left' }}>
+          <span style={{ background: 'rgba(59, 130, 246, 0.08)', color: 'var(--accent)', padding: '6px 14px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Prensa & Comunicados
+          </span>
+          <h1 style={{ fontSize: isMobile ? '34px' : '44px', fontWeight: '800', letterSpacing: '-1.2px', margin: '12px 0 8px 0', color: 'var(--text-main)', lineHeight: '1.1' }}>
+            Crónicas & <span style={{ color: 'var(--accent)' }}>Anuncios</span>
+          </h1>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: isMobile ? '14.5px' : '16.5px', fontWeight: '400' }}>
+            Canal oficial de actualizaciones, boletines y novedades de la comunidad.
+          </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+        {/* Barra de Búsqueda */}
+        <div style={{ display: 'flex', width: '100%' }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: theme.textMuted }} />
+            <Search size={18} style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input 
-              placeholder="Buscar comunicados..." 
+              type="text"
+              placeholder="Buscar comunicados por título, contenido o palabras clave..." 
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, padding: '10px 10px 10px 40px', borderRadius: '10px', color: '#fff', outline: 'none' }}
+              style={{ 
+                width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', 
+                padding: '16px 16px 16px 52px', borderRadius: '18px', color: 'var(--text-main)', 
+                outline: 'none', fontSize: '14.5px', transition: 'all 0.25s', boxSizing: 'border-box',
+                boxShadow: 'var(--shadow)'
+              }}
+              className="search-input"
             />
           </div>
-          {isAdmin && (
-             <button style={{ padding: '10px 20px', background: theme.accent, border: 'none', borderRadius: '10px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-               <Plus size={18} /> Publicar
-             </button>
-          )}
         </div>
       </div>
 
-      {/* --- GRID DE CONTENIDO --- */}
-      {cargando ? <SkeletonLoader /> : (
+      {/* --- SELECTOR DE FILTROS REALES (TABS) --- */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '36px', overflowX: 'auto' }}>
+        <button 
+          onClick={() => setFiltroActivo('todas')}
+          style={{
+            background: filtroActivo === 'todas' ? 'var(--text-main, #111827)' : 'transparent',
+            color: filtroActivo === 'todas' ? 'var(--bg-primary, #ffffff)' : 'var(--text-muted, #6b7280)',
+            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+          }}
+        >
+          <Layers size={15} /> Todos los artículos
+        </button>
+        
+        <button 
+          onClick={() => setFiltroActivo('guardadas')}
+          style={{
+            background: filtroActivo === 'guardadas' ? 'var(--accent, #3b82f6)' : 'transparent',
+            color: filtroActivo === 'guardadas' ? '#ffffff' : 'var(--text-muted, #6b7280)',
+            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+          }}
+          className={filtroActivo !== 'guardadas' ? 'bookmark-tab-trigger' : ''}
+        >
+          <Bookmark size={15} fill={filtroActivo === 'guardadas' ? 'currentColor' : 'none'} /> 
+          Mis Guardados ({favoritos.length})
+        </button>
+      </div>
+
+      {/* --- RENDERIZADO DE LAS TARJETAS --- */}
+      {cargando ? (
+        <SkeletonLoader />
+      ) : (
         noticiasFiltradas.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '100px', border: `1px dashed ${theme.border}`, borderRadius: '20px' }}>
-            <ShieldAlert size={48} style={{ color: theme.textMuted, marginBottom: '20px' }} />
-            <p style={{ color: theme.textMuted }}>No se encontraron noticias con ese criterio.</p>
+          <div style={{ textAlign: 'center', padding: '80px 20px', border: '1px dashed var(--border)', borderRadius: '24px', background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+            <ShieldAlert size={40} style={{ marginBottom: '14px', opacity: 0.6, color: 'var(--accent)' }} />
+            <p style={{ margin: 0, fontSize: '15px', fontWeight: '500' }}>
+              {filtroActivo === 'guardadas' 
+                ? 'No tienes lecturas pendientes en tus marcadores.' 
+                : 'No se encontraron artículos con ese criterio de búsqueda.'}
+            </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '25px' }}>
-            {noticiasFiltradas.map((noticia) => (
-              <article 
-                key={noticia.id} 
-                onClick={() => setNoticiaAbierta(noticia)}
-                style={{ 
-                  background: theme.card, border: `1px solid ${theme.border}`, borderRadius: '16px', 
-                  overflow: 'hidden', cursor: 'pointer', transition: 'all 0.3s',
-                  position: 'relative'
-                }}
-                className="news-card"
-              >
-                {noticia.multimedia && (
-                  <div style={{ height: '200px', background: '#000' }}>
-                    <img src={noticia.multimedia} alt={noticia.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-                <div style={{ padding: '24px' }}>
-                  <div style={{ color: theme.textMuted, fontSize: '12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Calendar size={12} /> {formatearFecha(noticia.fecha)}
-                  </div>
-                  <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '10px' }}>{noticia.titulo}</h3>
-                  <p style={{ color: theme.textMuted, fontSize: '14px', lineHeight: '1.6' }}>
-                    {noticia.descripcion.substring(0, 120)}...
-                  </p>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(310px, 1fr))', 
+            gap: '28px' 
+          }}>
+            {noticiasFiltradas.map((noticia) => {
+              const extractoTexto = noticia.descripcion || noticia.contenido || 'Sin descripción adicional.';
+              const marcadoComoFav = favoritos.includes(noticia.id);
+
+              return (
+                <Link 
+                  key={noticia.id} 
+                  to={`/noticias/${noticia.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ 
+                    background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '24px', 
+                    overflow: 'hidden', textDecoration: 'none', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    position: 'relative', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)'
+                  }}
+                  className="news-card"
+                >
                   
-                  <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: theme.accent, fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      Leer más <ArrowUpRight size={14} />
-                    </span>
-                    {isAdmin && (
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(noticia.id); }} style={{ background: 'none', border: 'none', color: theme.danger, cursor: 'pointer' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    )}
+                  {/* BOTÓN INTEGRADOR DE FAVORITOS DENTRO DE LA CARD */}
+                  <button
+                    onClick={(e) => toggleBookmark(e, noticia.id)}
+                    style={{
+                      position: 'absolute', top: '14px', right: '14px', zIndex: 12,
+                      background: 'rgba(255, 255, 255, 0.82)', backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(0,0,0,0.05)',
+                      color: marcadoComoFav ? 'var(--accent, #3b82f6)' : '#111827',
+                      padding: '8px', borderRadius: '10px', cursor: 'pointer', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease'
+                    }}
+                    className="card-bookmark-trigger"
+                    title={marcadoComoFav ? "Quitar de marcadores" : "Guardar para después"}
+                  >
+                    <Bookmark size={15} fill={marcadoComoFav ? "currentColor" : "none"} />
+                  </button>
+
+                  {/* IMAGEN DE PORTADA */}
+                  {noticia.fotoDefinitiva ? (
+                    <div style={{ height: '190px', width: '100%', overflow: 'hidden', borderBottom: '1px solid var(--border)', background: '#0a0a0c' }}>
+                      <img 
+                        src={noticia.fotoDefinitiva} 
+                        alt={noticia.titulo} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.4s ease' }} 
+                        className="card-image"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ height: '190px', width: '100%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', justifyContent: 'center' }}>
+                      <ImageIcon size={32} style={{ opacity: 0.25, color: 'var(--accent)' }} />
+                    </div>
+                  )}
+                  
+                  {/* CUERPO TEXTUAL */}
+                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                      <Calendar size={13} style={{ color: 'var(--accent)' }} /> {formatearFecha(noticia.fecha || noticia.createdAt)}
+                    </div>
+                    
+                    <h3 style={{ fontSize: '19px', fontWeight: '800', margin: '0 0 10px 0', color: 'var(--text-main)', lineHeight: '1.4', letterSpacing: '-0.3px' }}>
+                      {noticia.titulo}
+                    </h3>
+                    
+                    <p style={{ 
+                      color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6', margin: '0 0 24px 0', 
+                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' 
+                    }}>
+                      {extractoTexto}
+                    </p>
+                    
+                    <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--accent)', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }} className="read-more-btn">
+                        Leer boletín completo <ArrowUpRight size={14} style={{ transition: 'transform 0.2s' }} className="arrow-icon" />
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )
       )}
 
-      {/* --- ESTILOS DINÁMICOS --- */}
+      {/* --- INYECCIÓN DE ESTILOS DE INTERACCIÓN --- */}
       <style>{`
-        .news-card:hover { transform: translateY(-5px); border-color: ${theme.accent}; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .news-card:hover { 
+          transform: translateY(-6px); 
+          border-color: var(--accent); 
+          box-shadow: 0 22px 40px rgba(0, 0, 0, 0.15); 
+        }
+        .news-card:hover .card-image {
+          transform: scale(1.03);
+        }
+        .news-card:hover .arrow-icon {
+          transform: translate(2px, -2px);
+        }
+        .search-input:focus {
+          border-color: var(--accent) !important;
+          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12) !important;
+        }
+        .bookmark-tab-trigger:hover {
+          background: var(--bg-secondary) !important;
+          color: var(--text-main) !important;
+        }
+        .card-bookmark-trigger:hover {
+          transform: scale(1.06);
+          background: #ffffff !important;
+        }
       `}</style>
     </div>
   );

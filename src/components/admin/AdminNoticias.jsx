@@ -1,354 +1,435 @@
-// src/components/admin/AdminNoticias.jsx
-import { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../../firebase';
-import { formatDistanceToNow } from 'date-fns';
-import { es } from 'date-fns/locale';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useRef } from 'react';
+import { db } from "../../firebase";
+import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
+import { PlusCircle, Trash2, Calendar, Eye, Loader2, CheckCircle, Star, Film, Image as ImageIcon, Upload, Link2, AlertCircle } from 'lucide-react';
 
-const CATEGORIAS = ['General', 'Eventos', 'Fotos', 'Logros', 'Otro'];
-
-const EMPTY_FORM = { titulo: '', resumen: '', contenido: '', categoria: 'General', autor: '' };
+// CONFIGURACIÓN DE CLOUDINARY (Uso de variables de entorno de Vite)
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "TU_CLOUD_NAME"; 
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "TU_UPLOAD_PRESET"; 
 
 export default function AdminNoticias() {
   const [noticias, setNoticias] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [editId, setEditId] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
-  const [extraFiles, setExtraFiles] = useState([]);
-  const [extraPreviews, setExtraPreviews] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const imgRef = useRef();
-  const extrasRef = useRef();
+  const [success, setSuccess] = useState(false);
 
-  useEffect(() => { fetchNoticias(); }, []);
+  // Estados del Formulario
+  const [titulo, setTitulo] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [imagenUrl, setImagenUrl] = useState(''); 
+  const [destacada, setDestacada] = useState(false);
 
-  async function fetchNoticias() {
-    try {
-      const snap = await getDocs(query(collection(db, 'noticias'), orderBy('createdAt', 'desc')));
-      setNoticias(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }
+  // Estados para la subida local
+  const [tipoMetodo, setTipoMetodo] = useState('local'); // 'local' o 'link'
+  const [archivoLocal, setArchivoLocal] = useState(null);
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+  const fileInputRef = useRef(null);
 
-  function handleImageChange(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  }
+  // Utilidades
+  const esVideo = (url) => {
+    if (!url) return false;
+    const extensionesVideo = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
+    const esUrlVideoDirecto = extensionesVideo.some(ext => url.toLowerCase().includes(ext));
+    const esYoutube = url.includes('youtube.com') || url.includes('youtu.be');
+    return esUrlVideoDirecto || esYoutube;
+  };
 
-  function handleExtrasChange(e) {
-    const files = Array.from(e.target.files);
-    setExtraFiles(files);
-    setExtraPreviews(files.map(f => ({ url: URL.createObjectURL(f), type: f.type })));
-  }
-
-  async function uploadFile(file, path) {
-    return new Promise((resolve, reject) => {
-      const storageRef = ref(storage, path);
-      const task = uploadBytesResumable(storageRef, file);
-      task.on('state_changed',
-        snap => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-        reject,
-        async () => resolve(await getDownloadURL(task.snapshot.ref))
-      );
-    });
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.titulo.trim()) { toast.error('El título es obligatorio'); return; }
-    setSubmitting(true);
-    setUploading(true);
-    try {
-      let imageUrl = editId ? noticias.find(n => n.id === editId)?.imageUrl || '' : '';
-      let mediaUrls = editId ? noticias.find(n => n.id === editId)?.mediaUrls || [] : [];
-
-      if (imageFile) {
-        imageUrl = await uploadFile(imageFile, `noticias/${Date.now()}_${imageFile.name}`);
-      }
-      if (extraFiles.length > 0) {
-        const urls = await Promise.all(extraFiles.map(f => uploadFile(f, `noticias/extras/${Date.now()}_${f.name}`)));
-        mediaUrls = [...mediaUrls, ...urls];
-      }
-
-      const data = { ...form, imageUrl, mediaUrls, updatedAt: serverTimestamp() };
-
-      if (editId) {
-        await updateDoc(doc(db, 'noticias', editId), data);
-        toast.success('Noticia actualizada ✅');
-      } else {
-        await addDoc(collection(db, 'noticias'), { ...data, createdAt: serverTimestamp() });
-        toast.success('Noticia publicada 🎉');
-      }
-
-      setForm(EMPTY_FORM);
-      setImageFile(null); setImagePreview('');
-      setExtraFiles([]); setExtraPreviews([]);
-      setEditId(null); setShowForm(false);
-      fetchNoticias();
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al guardar');
-    } finally {
-      setSubmitting(false); setUploading(false); setProgress(0);
+  const obtenerEmbedYoutube = (url) => {
+    if (!url) return '';
+    if (url.includes('youtube.com/embed/')) return url;
+    let videoId = '';
+    if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split(/[?#]/)[0];
+    } else if (url.includes('v=')) {
+      videoId = url.split('v=')[1]?.split(/[&#]/)[0];
     }
-  }
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+  };
 
-  async function handleDelete(noticia) {
-    if (!window.confirm(`¿Eliminar "${noticia.titulo}"?`)) return;
+  const cargarNoticias = async () => {
     try {
-      await deleteDoc(doc(db, 'noticias', noticia.id));
-      if (noticia.imageUrl) {
-        try { await deleteObject(ref(storage, noticia.imageUrl)); } catch (_) {}
-      }
-      toast.success('Noticia eliminada');
-      fetchNoticias();
-    } catch (e) { toast.error('Error al eliminar'); }
-  }
+      const q = query(collection(db, 'noticias'), orderBy('fecha', 'desc'));
+      const querySnapshot = await getDocs(q);
+      setNoticias(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error("Error al obtener noticias:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  function handleEdit(n) {
-    setForm({ titulo: n.titulo || '', resumen: n.resumen || '', contenido: n.contenido || '', categoria: n.categoria || 'General', autor: n.autor || '' });
-    setImagePreview(n.imageUrl || '');
-    setEditId(n.id);
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+  useEffect(() => {
+    cargarNoticias();
+  }, []);
+
+  const subirACloudinary = async (file) => {
+    const esVideoArchivo = file.type.startsWith('video/');
+    const resourceType = esVideoArchivo ? 'video' : 'image';
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const respuesta = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
+      { method: 'POST', body: formData }
+    );
+
+    if (!respuesta.ok) throw new Error("Error en el servidor de Cloudinary");
+    const data = await respuesta.json();
+    return data.secure_url; 
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!titulo.trim() || !descripcion.trim()) return alert("Por favor llena los campos requeridos");
+
+    setSubmitting(true);
+    setSuccess(false);
+
+    try {
+      let urlFinalMultimedia = imagenUrl.trim();
+
+      if (tipoMetodo === 'local' && archivoLocal) {
+        setSubiendoArchivo(true);
+        urlFinalMultimedia = await subirACloudinary(archivoLocal);
+        setSubiendoArchivo(false);
+      }
+
+      if (destacada) {
+        const batch = writeBatch(db);
+        noticias.forEach((noticia) => {
+          if (noticia.destacada) {
+            const docRef = doc(db, 'noticias', noticia.id);
+            batch.update(docRef, { destacada: false });
+          }
+        });
+        await batch.commit();
+      }
+
+      await addDoc(collection(db, 'noticias'), {
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim(),
+        imagen: urlFinalMultimedia || '',
+        views: 0,
+        destacada: destacada,
+        fecha: serverTimestamp()
+      });
+
+      // Resetear estados
+      setTitulo('');
+      setDescripcion('');
+      setImagenUrl('');
+      setArchivoLocal(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setDestacada(false);
+      setSuccess(true);
+      
+      await cargarNoticias();
+      setTimeout(() => setSuccess(false), 5000);
+    } catch (error) {
+      console.error("Error al publicar la noticia:", error);
+      alert("Hubo un problema al subir el archivo o conectar con la base de datos.");
+    } finally {
+      setSubmitting(false);
+      setSubiendoArchivo(false);
+    }
+  };
+
+  const toggleDestacadoExistente = async (id, estadoActual) => {
+    try {
+      if (!estadoActual) {
+        const batch = writeBatch(db);
+        noticias.forEach((noticia) => {
+          if (noticia.destacada) {
+            batch.update(doc(db, 'noticias', noticia.id), { destacada: false });
+          }
+        });
+        batch.update(doc(db, 'noticias', id), { destacada: true });
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, 'noticias', id), { destacada: false });
+      }
+      await cargarNoticias();
+    } catch (error) {
+      console.error("Error cambiando el destacado:", error);
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    if (!window.confirm("¿Seguro que deseas eliminar esta noticia definitivamente? Esta acción no se puede deshacer.")) return;
+    try {
+      await deleteDoc(doc(db, 'noticias', id));
+      setNoticias(noticias.filter(n => n.id !== id));
+    } catch (error) {
+      console.error("Error al borrar:", error);
+    }
+  };
+
+  const obtenerPreviewLocal = () => {
+    if (archivoLocal) return URL.createObjectURL(archivoLocal);
+    return imagenUrl;
+  };
+
+  // ESTILOS REUTILIZABLES PARA PRODUCCIÓN
+  const inputStyles = {
+    width: '100%',
+    padding: '12px 16px',
+    background: 'var(--bg-primary, #ffffff)',
+    border: '1px solid var(--border, #d1d5db)',
+    borderRadius: '8px',
+    color: 'var(--text-main, #1f2937)',
+    fontSize: '14.5px',
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+  };
+
+  const labelStyles = {
+    fontSize: '12px',
+    fontWeight: '700',
+    color: 'var(--text-muted, #4b5563)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  };
 
   return (
-    <div className="admin-section">
-      <div className="admin-section-header">
-        <p className="section-count">{noticias.length} noticia{noticias.length !== 1 ? 's' : ''}</p>
-        <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setEditId(null); setForm(EMPTY_FORM); setImagePreview(''); }}>
-          {showForm ? '✕ Cancelar' : '+ Nueva Noticia'}
-        </button>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px', color: 'var(--text-main, #111827)', minHeight: '90vh', boxSizing: 'border-box', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      
+      {/* HEADER */}
+      <div style={{ borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '24px', marginBottom: '40px' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px', margin: 0, color: 'var(--text-main, #111827)' }}>
+          Consola de <span style={{ color: 'var(--accent, #10b981)' }}>Noticias & Prensa</span>
+        </h1>
+        <p style={{ color: 'var(--text-muted, #6b7280)', margin: '8px 0 0 0', fontSize: '15px' }}>
+          Gestiona, redacta y publica artículos o contenido multimedia directamente al inicio.
+        </p>
       </div>
 
-      {/* Formulario */}
-      {showForm && (
-        <div className="admin-form-card">
-          <h3 className="form-card-title">{editId ? '✏️ Editar noticia' : '📰 Nueva noticia'}</h3>
-          <form onSubmit={handleSubmit} className="admin-form">
-            <div className="form-row-2">
-              <div className="form-group">
-                <label className="form-label">Título *</label>
-                <input className="form-input" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título de la noticia" />
+      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 992 ? '1fr' : '450px 1fr', gap: '40px', alignItems: 'start' }}>
+        
+        {/* ================= FORMULARIO DE CREACIÓN ================= */}
+        <form onSubmit={handleSubmit} style={{ background: 'var(--bg-secondary, #ffffff)', border: '1px solid var(--border, #e5e7eb)', padding: '32px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '16px' }}>
+            <PlusCircle size={22} style={{ color: 'var(--accent, #10b981)' }} />
+            <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Redactar Nueva Noticia</h2>
+          </div>
+
+          {success && (
+            <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <CheckCircle size={18} /> Noticia indexada y publicada exitosamente.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={labelStyles}>Título del Artículo <span style={{color: '#ef4444'}}>*</span></label>
+            <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} required placeholder="Ej: Tráiler oficial de la nueva temporada" style={inputStyles} />
+          </div>
+
+          {/* SELECTOR DE MÉTODO MULTIMEDIA */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={labelStyles}>Origen Multimedia</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--bg-primary, #f3f4f6)', padding: '6px', borderRadius: '10px', border: '1px solid var(--border, #e5e7eb)' }}>
+              <button type="button" onClick={() => { setTipoMetodo('local'); setImagenUrl(''); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', background: tipoMetodo === 'local' ? 'var(--accent, #10b981)' : 'transparent', color: tipoMetodo === 'local' ? '#fff' : 'var(--text-muted, #4b5563)', boxShadow: tipoMetodo === 'local' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}>
+                <Upload size={16} /> Subir archivo
+              </button>
+              <button type="button" onClick={() => { setTipoMetodo('link'); setArchivoLocal(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s', background: tipoMetodo === 'link' ? 'var(--accent, #10b981)' : 'transparent', color: tipoMetodo === 'link' ? '#fff' : 'var(--text-muted, #4b5563)', boxShadow: tipoMetodo === 'link' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}>
+                <Link2 size={16} /> Pegar enlace
+              </button>
+            </div>
+          </div>
+
+          {/* INPUT DEPENDIENDO DEL MÉTODO (DISEÑO MEJORADO) */}
+          {tipoMetodo === 'local' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={labelStyles}>Selecciona Imagen o Video</label>
+              
+              {/* Input Nativo Oculto */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                accept="image/*,video/*" 
+                onChange={(e) => setArchivoLocal(e.target.files[0] || null)} 
+                style={{ display: 'none' }} 
+              />
+              
+              {/* Contenedor Interactivo Estilizado */}
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent, #10b981)';
+                  e.currentTarget.style.background = 'rgba(16, 185, 129, 0.02)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = archivoLocal ? 'var(--accent, #10b981)' : 'var(--border, #d1d5db)';
+                  e.currentTarget.style.background = 'var(--bg-secondary, #ffffff)';
+                }}
+                style={{ 
+                  width: '100%', 
+                  padding: '24px 16px', 
+                  background: 'var(--bg-secondary, #ffffff)', 
+                  border: `2px dashed ${archivoLocal ? 'var(--accent, #10b981)' : 'var(--border, #d1d5db)'}`, 
+                  borderRadius: '12px', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'center',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {/* Icono Condicional */}
+                <div style={{ 
+                  background: archivoLocal ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary, #f3f4f6)', 
+                  padding: '12px', 
+                  borderRadius: '50%', 
+                  marginBottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {archivoLocal ? (
+                    esVideo(archivoLocal.name) ? <Film size={22} style={{ color: 'var(--accent, #10b981)' }} /> : <ImageIcon size={22} style={{ color: 'var(--accent, #10b981)' }} />
+                  ) : (
+                    <Upload size={22} style={{ color: 'var(--text-muted, #9ca3af)' }} />
+                  )}
+                </div>
+
+                {/* Texto Principal */}
+                <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '700', color: archivoLocal ? 'var(--accent, #10b981)' : 'var(--text-main, #111827)' }}>
+                  {archivoLocal ? '¡Archivo Cargado!' : 'Examinar archivos locales'}
+                </p>
+                
+                {/* Detalles / Nombre del archivo */}
+                <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-muted, #6b7280)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {archivoLocal ? archivoLocal.name : 'Arrastra o selecciona fotos/videos'}
+                </p>
               </div>
-              <div className="form-group">
-                <label className="form-label">Categoría</label>
-                <select className="form-select" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
-                  {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
             </div>
-
-            <div className="form-group">
-              <label className="form-label">Autor</label>
-              <input className="form-input" value={form.autor} onChange={e => setForm({ ...form, autor: e.target.value })} placeholder="Nombre del autor (opcional)" />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={labelStyles}>URL Externa (MP4, YouTube, etc.)</label>
+              <input type="url" value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} placeholder="https://ejemplo.com/video.mp4" style={inputStyles} />
             </div>
+          )}
 
-            <div className="form-group">
-              <label className="form-label">Resumen corto</label>
-              <input className="form-input" value={form.resumen} onChange={e => setForm({ ...form, resumen: e.target.value })} placeholder="Descripción breve para la lista" />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Contenido completo *</label>
-              <textarea className="form-textarea" value={form.contenido} onChange={e => setForm({ ...form, contenido: e.target.value })} placeholder="Escribe la noticia aquí..." rows={8} />
-            </div>
-
-            {/* Imagen principal */}
-            <div className="form-group">
-              <label className="form-label">Imagen principal</label>
-              <div className="upload-area" onClick={() => imgRef.current.click()}>
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Preview" className="upload-preview" />
+          {/* PREVISUALIZADOR INTELIGENTE */}
+          {(archivoLocal || imagenUrl.trim()) && (
+            <div style={{ background: 'var(--bg-primary, #f9fafb)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border, #d1d5db)' }}>
+              <p style={{ margin: '0 0 10px 0', fontSize: '11px', fontWeight: '700', color: 'var(--text-muted, #6b7280)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {esVideo(archivoLocal?.name || imagenUrl) ? <Film size={14} /> : <ImageIcon size={14} />} Vista previa del archivo
+              </p>
+              <div style={{ width: '100%', height: '200px', borderRadius: '8px', overflow: 'hidden', background: '#111', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)' }}>
+                {esVideo(archivoLocal?.name || imagenUrl) ? (
+                  (archivoLocal === null && (imagenUrl.includes('youtube.com') || imagenUrl.includes('youtu.be'))) ? (
+                    <iframe src={obtenerEmbedYoutube(imagenUrl)} title="Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
+                  ) : (
+                    <video src={obtenerPreviewLocal()} controls muted style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  )
                 ) : (
-                  <div className="upload-placeholder">
-                    <span>🖼️</span>
-                    <span>Haz clic para subir imagen</span>
-                    <span className="upload-hint">JPG, PNG, WebP</span>
-                  </div>
+                  <img src={obtenerPreviewLocal()} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
                 )}
               </div>
-              <input type="file" ref={imgRef} accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
-              {imagePreview && <button type="button" className="btn btn-ghost clear-btn" onClick={() => { setImageFile(null); setImagePreview(''); }}>✕ Quitar imagen</button>}
             </div>
+          )}
 
-            {/* Archivos extra */}
-            <div className="form-group">
-              <label className="form-label">Fotos/Videos extra (galería)</label>
-              <div className="upload-area-sm" onClick={() => extrasRef.current.click()}>
-                <span>📎 Agregar fotos o videos adicionales</span>
+          {/* OPCIÓN INTERRUPTOR DESTACAR */}
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: destacada ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-primary, #f9fafb)', padding: '16px', borderRadius: '12px', border: destacada ? '1px solid var(--accent, #10b981)' : '1px solid var(--border, #e5e7eb)', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Star size={20} style={{ color: destacada ? 'var(--accent, #10b981)' : 'var(--text-muted, #9ca3af)' }} fill={destacada ? 'var(--accent, #10b981)' : 'transparent'} />
+              <div>
+                <p style={{ margin: 0, fontSize: '14.5px', fontWeight: '700', color: 'var(--text-main, #111827)' }}>Fijar como Destacada</p>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted, #6b7280)', marginTop: '2px' }}>Aparecerá en el Banner principal del Home</p>
               </div>
-              <input type="file" ref={extrasRef} accept="image/*,video/*" multiple onChange={handleExtrasChange} style={{ display: 'none' }} />
-              {extraPreviews.length > 0 && (
-                <div className="extras-preview">
-                  {extraPreviews.map((p, i) => (
-                    p.type.startsWith('video') ?
-                      <video key={i} src={p.url} className="extra-thumb" /> :
-                      <img key={i} src={p.url} alt="" className="extra-thumb" />
-                  ))}
+            </div>
+            <input type="checkbox" checked={destacada} onChange={(e) => setDestacada(e.target.checked)} style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: 'var(--accent, #10b981)' }} />
+          </label>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={labelStyles}>Cuerpo / Descripción <span style={{color: '#ef4444'}}>*</span></label>
+            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required rows={5} placeholder="Escribe el contenido detallado aquí..." style={{...inputStyles, resize: 'vertical', lineHeight: '1.6'}} />
+          </div>
+
+          <button type="submit" disabled={submitting || subiendoArchivo} style={{ background: (submitting || subiendoArchivo) ? 'var(--text-muted, #9ca3af)' : 'var(--accent, #10b981)', color: '#fff', padding: '16px', borderRadius: '8px', border: 'none', fontWeight: '700', fontSize: '15px', cursor: (submitting || subiendoArchivo) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'background 0.3s, transform 0.1s', boxShadow: (submitting || subiendoArchivo) ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
+            {(submitting || subiendoArchivo) ? (
+              <>
+                <Loader2 className="animate-spin" size={20} /> 
+                {subiendoArchivo ? 'Procesando Multimedia...' : 'Publicando Noticia...'}
+              </>
+            ) : 'Publicar Noticia'}
+          </button>
+        </form>
+
+        {/* ================= LISTADO DE CONTROL ================= */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: 'var(--text-main, #111827)' }}>Historial de Publicaciones</h2>
+            <span style={{ background: 'var(--bg-secondary, #f3f4f6)', padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '700', color: 'var(--text-muted, #4b5563)', border: '1px solid var(--border, #e5e7eb)' }}>
+              {noticias.length} Registros
+            </span>
+          </div>
+          
+          {loading ? (
+            <div style={{ display: 'flex', padding: '60px', justifyContent: 'center', color: 'var(--accent, #10b981)' }}><Loader2 size={32} className="animate-spin" /></div>
+          ) : noticias.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', background: 'var(--bg-secondary, #f9fafb)', borderRadius: '16px', border: '1px dashed var(--border, #d1d5db)', textAlign: 'center' }}>
+              <AlertCircle size={40} style={{ color: 'var(--text-muted, #9ca3af)', marginBottom: '12px' }} />
+              <p style={{ margin: 0, color: 'var(--text-muted, #6b7280)', fontWeight: '500', fontSize: '15px' }}>No hay noticias registradas aún.<br/>Usa el panel izquierdo para crear la primera.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {noticias.map(n => (
+                <div key={n.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary, #ffffff)', border: n.destacada ? '1px solid var(--accent, #10b981)' : '1px solid var(--border, #e5e7eb)', padding: '16px', borderRadius: '12px', gap: '16px', justifyContent: 'space-between', transition: 'all 0.2s', boxShadow: n.destacada ? '0 4px 12px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: 0 }}>
+                    
+                    {/* MINIATURA */}
+                    <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6', flexShrink: 0, position: 'relative', border: '1px solid var(--border, #e5e7eb)' }}>
+                      {n.imagen ? (
+                         esVideo(n.imagen) ? (
+                          <>
+                            <video src={n.imagen.includes('youtube.com') || n.imagen.includes('youtu.be') ? '' : n.imagen} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                              <Film size={16} />
+                            </div>
+                          </>
+                        ) : (
+                          <img src={n.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        )
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
+                          <ImageIcon size={20} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-main, #111827)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.titulo}</h4>
+                      <div style={{ display: 'flex', gap: '16px', fontSize: '12.5px', color: 'var(--text-muted, #6b7280)', marginTop: '6px', fontWeight: '500' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={14} /> {n.fecha?.toDate ? n.fecha.toDate().toLocaleDateString() : 'Procesando...'}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Eye size={14} /> {n.views || 0} Visitas</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => toggleDestacadoExistente(n.id, n.destacada)} style={{ background: n.destacada ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary, #f3f4f6)', border: 'none', color: n.destacada ? 'var(--accent, #10b981)' : 'var(--text-muted, #6b7280)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', transition: 'all 0.2s' }} title={n.destacada ? "Quitar destacado" : "Destacar ahora"}>
+                      <Star size={18} fill={n.destacada ? 'var(--accent, #10b981)' : 'transparent'} />
+                    </button>
+                    <button onClick={() => handleEliminar(n.id)} style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#ef4444', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', transition: 'all 0.2s' }} title="Eliminar noticia">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
-
-            {uploading && (
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }} />
-                <span>{progress}%</span>
-              </div>
-            )}
-
-            <button type="submit" className="btn btn-primary submit-btn" disabled={submitting}>
-              {submitting ? 'Guardando...' : editId ? '💾 Actualizar' : '🚀 Publicar noticia'}
-            </button>
-          </form>
+          )}
         </div>
-      )}
 
-      {/* Lista */}
-      {loading ? <div className="loading-spinner" /> : (
-        <div className="noticias-list">
-          {noticias.length === 0 ? (
-            <div className="empty-admin">No hay noticias publicadas.</div>
-          ) : noticias.map(n => (
-            <div key={n.id} className="noticia-admin-item">
-              {n.imageUrl && <img src={n.imageUrl} alt={n.titulo} className="noticia-admin-thumb" />}
-              <div className="noticia-admin-info">
-                <div className="noticia-admin-header">
-                  <span className="tag tag-accent">{n.categoria}</span>
-                  <span className="noticia-admin-date">
-                    {n.createdAt?.toDate ? formatDistanceToNow(n.createdAt.toDate(), { addSuffix: true, locale: es }) : ''}
-                  </span>
-                </div>
-                <h3 className="noticia-admin-title">{n.titulo}</h3>
-                {n.resumen && <p className="noticia-admin-excerpt">{n.resumen}</p>}
-              </div>
-              <div className="noticia-admin-actions">
-                <button className="btn btn-ghost action-btn" onClick={() => handleEdit(n)}>✏️ Editar</button>
-                <button className="btn btn-ghost action-btn delete" onClick={() => handleDelete(n)}>🗑️ Borrar</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <style>{`
-        .admin-section { display: flex; flex-direction: column; gap: 24px; }
-        .admin-section-header { display: flex; align-items: center; justify-content: space-between; }
-        .section-count { color: var(--text3); font-size: 0.88rem; }
-        .admin-form-card {
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          padding: 28px;
-        }
-        .form-card-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
-        .admin-form { display: flex; flex-direction: column; gap: 18px; }
-        .form-row-2 { display: grid; grid-template-columns: 1fr 200px; gap: 16px; }
-        .upload-area {
-          border: 2px dashed var(--border2);
-          border-radius: var(--radius);
-          overflow: hidden;
-          cursor: pointer;
-          transition: border-color var(--transition);
-          min-height: 140px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .upload-area:hover { border-color: var(--accent); }
-        .upload-preview { width: 100%; max-height: 280px; object-fit: contain; }
-        .upload-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          color: var(--text3);
-          font-size: 0.9rem;
-          padding: 24px;
-        }
-        .upload-placeholder span:first-child { font-size: 2rem; }
-        .upload-hint { font-size: 0.75rem; color: var(--text3); }
-        .upload-area-sm {
-          border: 1.5px dashed var(--border2);
-          border-radius: var(--radius);
-          padding: 14px 20px;
-          cursor: pointer;
-          color: var(--text3);
-          font-size: 0.88rem;
-          text-align: center;
-          transition: border-color var(--transition);
-        }
-        .upload-area-sm:hover { border-color: var(--accent); color: var(--text2); }
-        .extras-preview { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-        .extra-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; }
-        .clear-btn { margin-top: 8px; font-size: 0.8rem; padding: 4px 12px; }
-        .progress-bar {
-          background: var(--bg3);
-          border-radius: var(--radius-full);
-          height: 8px;
-          position: relative;
-          overflow: hidden;
-        }
-        .progress-fill {
-          background: var(--accent);
-          height: 100%;
-          border-radius: var(--radius-full);
-          transition: width 0.3s;
-        }
-        .progress-bar span {
-          position: absolute;
-          right: 0; top: -20px;
-          font-size: 0.75rem;
-          color: var(--text3);
-        }
-        .submit-btn { justify-content: center; padding: 14px; }
-
-        /* List */
-        .noticias-list { display: flex; flex-direction: column; gap: 12px; }
-        .noticia-admin-item {
-          display: flex;
-          gap: 16px;
-          align-items: center;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 16px;
-          transition: border-color var(--transition);
-        }
-        .noticia-admin-item:hover { border-color: var(--border2); }
-        .noticia-admin-thumb {
-          width: 80px; height: 60px;
-          object-fit: cover;
-          border-radius: 8px;
-          flex-shrink: 0;
-        }
-        .noticia-admin-info { flex: 1; min-width: 0; }
-        .noticia-admin-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
-        .noticia-admin-date { font-size: 0.75rem; color: var(--text3); }
-        .noticia-admin-title { font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .noticia-admin-excerpt { font-size: 0.82rem; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .noticia-admin-actions { display: flex; gap: 8px; flex-shrink: 0; }
-        .action-btn { font-size: 0.8rem; padding: 6px 12px; }
-        .action-btn.delete { color: var(--accent); }
-        .action-btn.delete:hover { background: var(--accent-dim); }
-        .empty-admin { text-align: center; color: var(--text3); padding: 40px; }
-
-        @media (max-width: 600px) {
-          .form-row-2 { grid-template-columns: 1fr; }
-          .noticia-admin-item { flex-wrap: wrap; }
-          .noticia-admin-actions { width: 100%; }
-        }
-      `}</style>
+      </div>
     </div>
   );
 }

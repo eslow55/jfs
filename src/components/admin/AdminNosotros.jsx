@@ -1,243 +1,183 @@
-// src/components/admin/AdminNosotros.jsx
-import { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase';
-import toast from 'react-hot-toast';
-
-const EMPTY_MEMBER = { nombre: '', apodo: '', descripcion: '', foto: '' };
+import React, { useState, useEffect } from 'react';
+import { db } from '../../firebase';
+import { collection, doc, setDoc, onSnapshot, query, limit } from 'firebase/firestore';
+import { Save, Loader2, Users, Layout, Eye } from 'lucide-react';
 
 export default function AdminNosotros() {
-  const [info, setInfo] = useState({ descripcion: '', createdYear: '', miembros: [] });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [newMember, setNewMember] = useState(EMPTY_MEMBER);
-  const [memberPhotoFile, setMemberPhotoFile] = useState(null);
-  const [memberPhotoPreview, setMemberPhotoPreview] = useState('');
-  const photoRef = useRef();
+  const [titulo, setTitulo] = useState('');
+  const [eslogan, setEslogan] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [docId, setDocId] = useState('principal');
+  const [guardando, setGuardando] = useState(false);
+  const [notificacion, setNotificacion] = useState({ mostrar: false, mensaje: '', tipo: '' });
 
+  // Sincronización en tiempo real con el documento institucional único
   useEffect(() => {
-    async function fetch() {
-      try {
-        const snap = await getDoc(doc(db, 'config', 'nosotros'));
-        if (snap.exists()) setInfo(snap.data());
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    }
-    fetch();
+    const q = query(collection(db, 'nosotros'), limit(1));
+    return onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const d = snapshot.docs[0];
+        setDocId(d.id);
+        const data = d.data();
+        setTitulo(data.titulo || 'Sobre Nosotros');
+        setEslogan(data.eslogan || '');
+        setDescripcion(data.descripcion || '');
+      }
+    });
   }, []);
 
-  async function handleSaveInfo() {
-    setSaving(true);
+  const mostrarMensajeTemp = (mensaje, tipo) => {
+    setNotificacion({ mostrar: true, mensaje, tipo });
+    setTimeout(() => setNotificacion({ mostrar: false, mensaje: '', tipo: '' }), 4000);
+  };
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    if (!descripcion.trim()) return;
+
+    setGuardando(true);
     try {
-      await setDoc(doc(db, 'config', 'nosotros'), info, { merge: true });
-      toast.success('Información guardada ✅');
-    } catch (e) { toast.error('Error al guardar'); }
-    finally { setSaving(false); }
-  }
-
-  async function handleAddMember() {
-    if (!newMember.nombre.trim()) { toast.error('El nombre es obligatorio'); return; }
-    setSaving(true);
-    try {
-      let fotoUrl = '';
-      if (memberPhotoFile) {
-        await new Promise((resolve, reject) => {
-          const storageRef = ref(storage, `miembros/${Date.now()}_${memberPhotoFile.name}`);
-          const task = uploadBytesResumable(storageRef, memberPhotoFile);
-          task.on('state_changed', null, reject, async () => {
-            fotoUrl = await getDownloadURL(task.snapshot.ref);
-            resolve();
-          });
-        });
-      }
-      const miembro = { ...newMember, foto: fotoUrl };
-      const updated = { ...info, miembros: [...(info.miembros || []), miembro] };
-      setInfo(updated);
-      await setDoc(doc(db, 'config', 'nosotros'), updated, { merge: true });
-      setNewMember(EMPTY_MEMBER);
-      setMemberPhotoFile(null);
-      setMemberPhotoPreview('');
-      toast.success('Miembro agregado 👥');
-    } catch (e) { toast.error('Error'); }
-    finally { setSaving(false); }
-  }
-
-  async function handleRemoveMember(i) {
-    const updated = { ...info, miembros: info.miembros.filter((_, idx) => idx !== i) };
-    setInfo(updated);
-    await setDoc(doc(db, 'config', 'nosotros'), updated, { merge: true });
-    toast.success('Miembro eliminado');
-  }
-
-  if (loading) return <div className="loading-spinner" />;
+      await setDoc(doc(db, 'nosotros', docId), {
+        titulo: titulo.trim() || 'Sobre Nosotros',
+        eslogan: eslogan.trim(),
+        descripcion: descripcion.trim(),
+        ultimaActualizacion: new Date().toISOString()
+      }, { merge: true });
+      
+      mostrarMensajeTemp('Sección institucional actualizada con éxito.', 'success');
+    } catch (err) {
+      console.error(err);
+      mostrarMensajeTemp('Error al intentar guardar en la base de datos.', 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   return (
-    <div className="admin-section">
-      {/* Info general */}
-      <div className="admin-form-card">
-        <h3 className="form-card-title">📝 Información del grupo</h3>
-        <div className="admin-form">
-          <div className="form-group">
-            <label className="form-label">Descripción</label>
-            <textarea
-              className="form-textarea"
-              value={info.descripcion || ''}
-              onChange={e => setInfo({ ...info, descripcion: e.target.value })}
-              placeholder="Cuéntanos sobre el grupo..."
-              rows={4}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Año de fundación</label>
-            <input
-              className="form-input"
-              value={info.createdYear || ''}
-              onChange={e => setInfo({ ...info, createdYear: e.target.value })}
-              placeholder="Ej: 2022"
-            />
-          </div>
-          <button className="btn btn-primary" onClick={handleSaveInfo} disabled={saving}>
-            {saving ? 'Guardando...' : '💾 Guardar información'}
-          </button>
-        </div>
+    <div>
+      {/* CABECERA DEL MÓDULO */}
+      <div style={{ marginBottom: '28px' }}>
+        <h3 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-main)', margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
+          Sección Institucional Comunidad
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14.5px', margin: 0 }}>
+          Modifica el manifiesto, valores o información corporativa que se despliega al pie de la página principal.
+        </p>
       </div>
 
-      {/* Miembros */}
-      <div className="admin-form-card">
-        <h3 className="form-card-title">👥 Miembros del grupo</h3>
-
-        {/* Lista miembros */}
-        {info.miembros && info.miembros.length > 0 && (
-          <div className="members-list">
-            {info.miembros.map((m, i) => (
-              <div key={i} className="member-item">
-                <div className="member-avatar">
-                  {m.foto ? <img src={m.foto} alt={m.nombre} /> : <span>{m.nombre?.[0]}</span>}
-                </div>
-                <div className="member-info">
-                  <strong>{m.nombre}</strong>
-                  {m.apodo && <span className="member-apodo">"{m.apodo}"</span>}
-                  {m.descripcion && <span className="member-desc">{m.descripcion}</span>}
-                </div>
-                <button className="btn btn-ghost delete-btn" onClick={() => handleRemoveMember(i)}>🗑️</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Agregar miembro */}
-        <div className="add-member-form">
-          <h4 className="add-member-title">+ Agregar miembro</h4>
-          <div className="form-row-2">
-            <div className="form-group">
-              <label className="form-label">Nombre *</label>
-              <input className="form-input" value={newMember.nombre} onChange={e => setNewMember({ ...newMember, nombre: e.target.value })} placeholder="Nombre completo" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Apodo</label>
-              <input className="form-input" value={newMember.apodo} onChange={e => setNewMember({ ...newMember, apodo: e.target.value })} placeholder="Ej: El Crack" />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Descripción corta</label>
-            <input className="form-input" value={newMember.descripcion} onChange={e => setNewMember({ ...newMember, descripcion: e.target.value })} placeholder="Ej: El más chistoso del grupo" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Foto (opcional)</label>
-            <div className="member-upload" onClick={() => photoRef.current.click()}>
-              {memberPhotoPreview ? (
-                <img src={memberPhotoPreview} alt="Preview" className="member-photo-preview" />
-              ) : (
-                <span>📷 Subir foto</span>
-              )}
-            </div>
-            <input type="file" ref={photoRef} accept="image/*" style={{ display: 'none' }} onChange={e => {
-              const f = e.target.files[0];
-              if (f) { setMemberPhotoFile(f); setMemberPhotoPreview(URL.createObjectURL(f)); }
-            }} />
-          </div>
-          <button className="btn btn-primary" onClick={handleAddMember} disabled={saving}>
-            {saving ? 'Agregando...' : '+ Agregar miembro'}
-          </button>
+      {/* COMPONENTE DE NOTIFICACIÓN INLINE */}
+      {notificacion.mostrar && (
+        <div style={{
+          padding: '14px 20px',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          fontSize: '14px',
+          fontWeight: '600',
+          background: notificacion.tipo === 'success' ? 'rgba(0, 179, 89, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+          color: notificacion.tipo === 'success' ? 'var(--accent)' : 'var(--danger)',
+          border: `1px solid ${notificacion.tipo === 'success' ? 'rgba(0, 179, 89, 0.2)' : 'rgba(220, 53, 69, 0.2)'}`
+        }}>
+          {notificacion.mensaje}
         </div>
+      )}
+
+      {/* DISEÑO EN DOS COLUMNAS: FORMULARIO Y PREVIEW SIMULTÁNEO */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '30px' }}>
+        
+        {/* FORMULARIO ESTRUCTURADO */}
+        <form onSubmit={handleGuardar} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>
+                Título de la Sección
+              </label>
+              <input 
+                type="text" 
+                placeholder="Ej: Quiénes Somos / Sobre Nosotros" 
+                value={titulo} 
+                onChange={e => setTitulo(e.target.value)} 
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>
+                Eslogan o Lema Corto (Opcional)
+              </label>
+              <input 
+                type="text" 
+                placeholder="Ej: Innovación y desarrollo comunitario en tiempo real" 
+                value={eslogan} 
+                onChange={e => setEslogan(e.target.value)} 
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13.5px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>
+              Descripción o Manifiesto Institucional
+            </label>
+            <textarea 
+              placeholder="Escribe aquí de manera detallada la historia, misión o propósitos del portal..." 
+              value={descripcion} 
+              onChange={e => setDescripcion(e.target.value)} 
+              style={{ minHeight: '160px', lineHeight: '1.6', resize: 'vertical' }}
+              required 
+            />
+          </div>
+
+          <button type="submit" disabled={guardando} style={{ alignSelf: 'flex-start', borderRadius: '14px', padding: '14px 30px' }}>
+            {guardando ? (
+              <>
+                <Loader2 className="animate-spin" size={16} />
+                <span>Impactando cambios...</span>
+              </>
+            ) : (
+              <>
+                <Save size={16} /> Guardar Configuración Pública
+              </>
+            )}
+          </button>
+        </form>
+
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '15px 0' }} />
+
+        {/* CONTENEDOR DE PREVISUALIZACIÓN EN TIEMPO REAL */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-muted)' }}>
+            <Eye size={18} />
+            <h4 style={{ fontSize: '15px', fontWeight: '700', margin: 0 }}>Previsualización en tiempo real (Live Render)</h4>
+          </div>
+
+          <div style={{ 
+            padding: '40px 24px', 
+            background: 'var(--bg-primary)', 
+            border: '1px solid var(--border)',
+            borderRadius: '20px', 
+            textAlign: 'center',
+            boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.02)'
+          }}>
+            <div style={{ display: 'inline-flex', padding: '14px', borderRadius: '50%', background: 'var(--bg-secondary)', color: 'var(--accent)', marginBottom: '16px', border: '1px solid var(--border)' }}>
+              <Users size={28} />
+            </div>
+            
+            <h2 style={{ fontSize: '26px', marginBottom: '6px', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>
+              {titulo || 'Sobre Nosotros'}
+            </h2>
+
+            {eslogan && (
+              <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px', marginTop: 0 }}>
+                {eslogan}
+              </p>
+            )}
+
+            <p style={{ maxWidth: '700px', margin: '0 auto', color: 'var(--text-muted)', fontSize: '15px', lineHeight: '1.7', whiteSpace: 'pre-wrap', textAlign: 'center' }}>
+              {descripcion || 'Escribe contenido en el editor superior para previsualizar el render de producción en este bloque...'}
+            </p>
+          </div>
+        </div>
+
       </div>
-
-      <style>{`
-        .admin-section { display: flex; flex-direction: column; gap: 24px; }
-        .admin-form-card {
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          padding: 28px;
-        }
-        .form-card-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
-        .admin-form { display: flex; flex-direction: column; gap: 16px; }
-        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-        .members-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
-        .member-item {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 12px 16px;
-        }
-        .member-avatar {
-          width: 48px; height: 48px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--accent), var(--purple));
-          display: flex; align-items: center; justify-content: center;
-          font-family: var(--font-display);
-          font-weight: 800;
-          color: white;
-          font-size: 1.2rem;
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-        .member-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .member-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .member-info strong { font-family: var(--font-display); font-size: 0.95rem; }
-        .member-apodo { color: var(--accent2); font-size: 0.82rem; font-style: italic; }
-        .member-desc { color: var(--text3); font-size: 0.8rem; }
-        .delete-btn { font-size: 0.8rem; padding: 5px 10px; color: var(--accent); }
-
-        .add-member-form {
-          border-top: 1px solid var(--border);
-          padding-top: 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        .add-member-title {
-          font-family: var(--font-display);
-          font-size: 0.95rem;
-          font-weight: 600;
-          color: var(--text2);
-        }
-        .member-upload {
-          border: 2px dashed var(--border2);
-          border-radius: var(--radius);
-          padding: 16px;
-          text-align: center;
-          cursor: pointer;
-          color: var(--text3);
-          font-size: 0.88rem;
-          transition: border-color var(--transition);
-          min-height: 80px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .member-upload:hover { border-color: var(--accent); }
-        .member-photo-preview { width: 80px; height: 80px; object-fit: cover; border-radius: 50%; }
-
-        @media (max-width: 600px) {
-          .form-row-2 { grid-template-columns: 1fr; }
-        }
-      `}</style>
     </div>
   );
 }

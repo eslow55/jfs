@@ -1,264 +1,306 @@
-// src/components/admin/AdminGaleria.jsx
-import { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../../firebase';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useRef } from 'react';
+import { db } from '../../firebase';
+import { collection, addDoc, onSnapshot, orderBy, query, deleteDoc, doc } from 'firebase/firestore';
+import { Plus, Trash2, Loader2, UploadCloud, X, Film, ImageIcon } from 'lucide-react';
 
 export default function AdminGaleria() {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [files, setFiles] = useState([]);
-  const [previews, setPreviews] = useState([]);
-  const [titulo, setTitulo] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [progresses, setProgresses] = useState([]);
-  const fileRef = useRef();
+  const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [fileType, setFileType] = useState(''); // 'image' o 'video'
+  const [cargando, setCargando] = useState(false);
+  
+  const fileInputRef = useRef(null);
 
-  useEffect(() => { fetchItems(); }, []);
+  // Variables de entorno de Cloudinary instanciadas en Vite
+  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-  async function fetchItems() {
+  // Sincronización en tiempo real de la galería multimedia
+  useEffect(() => {
+    const q = query(collection(db, 'galeria'), orderBy('fecha', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+      setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, []);
+
+  // Manejador y validador de archivos binarios locales
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    const isVideo = selectedFile.type.startsWith('video/');
+    setFileType(isVideo ? 'video' : 'image');
+    setPreviewUrl(URL.createObjectURL(selectedFile));
+  };
+
+  // Petición asíncrona hacia la API de Cloudinary
+  const uploadToCloudinary = async () => {
+    if (!file) return '';
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+
+    const resourceType = fileType === 'video' ? 'video' : 'image';
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) throw new Error('Error al procesar la subida multimedia.');
+    const data = await res.json();
+    return data.secure_url;
+  };
+
+  const handleSubirItem = async (e) => {
+    e.preventDefault();
+    if (!file) return;
+
+    setCargando(true);
     try {
-      const snap = await getDocs(query(collection(db, 'galeria'), orderBy('createdAt', 'desc')));
-      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }
+      const secureMediaUrl = await uploadToCloudinary();
 
-  function handleFiles(e) {
-    const selected = Array.from(e.target.files);
-    setFiles(selected);
-    setPreviews(selected.map(f => ({ url: URL.createObjectURL(f), type: f.type, name: f.name })));
-    setProgresses(selected.map(() => 0));
-  }
+      // Almacenamiento unificado en Firestore
+      await addDoc(collection(db, 'galeria'), {
+        imagen: secureMediaUrl, 
+        tipo: fileType,
+        fecha: new Date().toISOString()
+      });
 
-  async function handleUpload() {
-    if (files.length === 0) { toast.error('Selecciona archivos primero'); return; }
-    setUploading(true);
-    try {
-      await Promise.all(files.map((file, i) => new Promise((resolve, reject) => {
-        const tipo = file.type.startsWith('video') ? 'video' : 'foto';
-        const storageRef = ref(storage, `galeria/${Date.now()}_${file.name}`);
-        const task = uploadBytesResumable(storageRef, file);
-        task.on('state_changed',
-          snap => {
-            const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-            setProgresses(prev => { const next = [...prev]; next[i] = pct; return next; });
-          },
-          reject,
-          async () => {
-            const url = await getDownloadURL(task.snapshot.ref);
-            await addDoc(collection(db, 'galeria'), { url, tipo, titulo: titulo || file.name, createdAt: serverTimestamp() });
-            resolve();
-          }
-        );
-      })));
-      toast.success(`${files.length} archivo(s) subidos 🎉`);
-      setFiles([]); setPreviews([]); setTitulo(''); setProgresses([]);
-      fetchItems();
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al subir archivos');
-    } finally { setUploading(false); }
-  }
+      // Limpieza de estados
+      setFile(null);
+      setPreviewUrl('');
+      setFileType('');
+    } catch (err) {
+      alert('Error de red al subir el archivo local. Revisa los presets de Cloudinary.');
+      console.error(err);
+    } finally {
+      setCargando(false);
+    }
+  };
 
-  async function handleDelete(item) {
-    if (!window.confirm('¿Eliminar este archivo de la galería?')) return;
-    try {
-      await deleteDoc(doc(db, 'galeria', item.id));
-      try { await deleteObject(ref(storage, item.url)); } catch (_) {}
-      toast.success('Eliminado');
-      fetchItems();
-    } catch (e) { toast.error('Error al eliminar'); }
-  }
+  const handleEliminarItem = async (id) => {
+    if (window.confirm('¿Deseas remover este recurso de la galería global de forma permanente?')) {
+      await deleteDoc(doc(db, 'galeria', id));
+    }
+  };
 
   return (
-    <div className="admin-section">
-      <div className="admin-section-header">
-        <p className="section-count">{items.length} archivo(s) en galería</p>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: 'var(--text-main, #111827)' }}>
+      {/* CABECERA DEL MÓDULO */}
+      <div style={{ borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '20px', marginBottom: '32px' }}>
+        <h3 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-main, #111827)', margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
+          Portfolio <span style={{ color: 'var(--accent, #10b981)' }}>Galería Histórica</span>
+        </h3>
+        <p style={{ color: 'var(--text-muted, #6b7280)', fontSize: '14.5px', margin: 0 }}>
+          Sube fotografías del servidor, capturas de pantalla de la comunidad o videoclips en alta fidelidad.
+        </p>
       </div>
+      
+      {/* FORMULARIO DE CARGA DRAG & DROP */}
+      <form onSubmit={handleSubirItem} style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '40px' }}>
+        <div style={{ width: '100%' }}>
+          {!previewUrl ? (
+            /* Área de Carga Personalizada Avanzada (Dropzone) */
+            <div 
+              onClick={() => fileInputRef.current.click()}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent, #10b981)';
+                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border, #d1d5db)';
+                e.currentTarget.style.background = 'var(--bg-primary, #f9fafb)';
+              }}
+              style={{
+                border: '2px dashed var(--border, #d1d5db)',
+                borderRadius: '16px',
+                padding: '48px 24px',
+                textAlign: 'center',
+                background: 'var(--bg-primary, #f9fafb)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box'
+              }}
+            >
+              {/* Contenedor circular elegante para el ícono */}
+              <div style={{
+                background: 'var(--bg-secondary, #ffffff)',
+                padding: '14px',
+                borderRadius: '50%',
+                marginBottom: '14px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <UploadCloud size={26} style={{ color: 'var(--text-muted, #9ca3af)' }} />
+              </div>
 
-      {/* Upload */}
-      <div className="admin-form-card">
-        <h3 className="form-card-title">📤 Subir fotos/videos</h3>
-        <div className="upload-zone" onClick={() => fileRef.current.click()}>
-          {previews.length === 0 ? (
-            <div className="upload-placeholder">
-              <span style={{ fontSize: '3rem' }}>📁</span>
-              <span>Haz clic o arrastra archivos aquí</span>
-              <span className="upload-hint">Fotos y videos desde tu celular o computador</span>
+              <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-main, #111827)' }}>
+                Selecciona una foto o video desde tu dispositivo
+              </p>
+              <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: 'var(--text-muted, #6b7280)' }}>
+                Formatos aceptados: PNG, JPG, WEBP, MP4 o MOV (Max 10MB)
+              </p>
             </div>
           ) : (
-            <div className="upload-previews-grid">
-              {previews.map((p, i) => (
-                <div key={i} className="upload-preview-item">
-                  {p.type.startsWith('video') ? (
-                    <video src={p.url} className="up-thumb" />
-                  ) : (
-                    <img src={p.url} alt="" className="up-thumb" />
-                  )}
-                  {uploading && (
-                    <div className="up-progress">
-                      <div className="up-progress-fill" style={{ width: `${progresses[i] || 0}%` }} />
-                    </div>
-                  )}
-                  <span className="up-name">{p.name.substring(0, 20)}</span>
-                </div>
-              ))}
+            /* Previsualizador de alta fidelidad cuando ya hay archivo */
+            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border, #e5e7eb)', background: '#0b0b0e', maxHeight: '360px', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              {fileType === 'video' ? (
+                <video src={previewUrl} controls style={{ maxHeight: '360px', width: '100%', objectFit: 'contain' }} />
+              ) : (
+                <img src={previewUrl} alt="Preview temporal" style={{ maxHeight: '360px', width: '100%', objectFit: 'contain' }} />
+              )}
+              
+              <button 
+                type="button"
+                onClick={() => { setFile(null); setPreviewUrl(''); setFileType(''); }}
+                style={{
+                  position: 'absolute',
+                  top: '14px',
+                  right: '14px',
+                  background: 'rgba(15, 15, 20, 0.85)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s, transform 0.1s',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#ef4444'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(15, 15, 20, 0.85)'}
+              >
+                <X size={18} />
+              </button>
             </div>
           )}
+          
+          {/* Input oculto controlado por la Ref */}
+          <input type="file" ref={fileInputRef} accept="image/*,video/*" onChange={handleFileChange} style={{ display: 'none' }} />
         </div>
-        <input type="file" ref={fileRef} accept="image/*,video/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
 
-        {files.length > 0 && (
-          <div className="upload-controls">
-            <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Título (opcional, se aplica a todos)</label>
-              <input className="form-input" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Salida del viernes" />
-            </div>
-            <button className="btn btn-primary" onClick={handleUpload} disabled={uploading}>
-              {uploading ? `Subiendo...` : `📤 Subir ${files.length} archivo(s)`}
+        {/* Botón de Envíos Estilizado Completamente */}
+        <button 
+          type="submit" 
+          disabled={cargando || !file} 
+          style={{ 
+            alignSelf: 'flex-start', 
+            borderRadius: '12px', 
+            padding: '14px 28px',
+            background: (cargando || !file) ? 'var(--text-muted, #9ca3af)' : 'var(--accent, #10b981)',
+            color: '#fff',
+            border: 'none',
+            fontWeight: '700',
+            fontSize: '14.5px',
+            cursor: (cargando || !file) ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            transition: 'all 0.2s ease',
+            boxShadow: (cargando || !file) ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)'
+          }}
+        >
+          {cargando ? (
+            <>
+              <Loader2 className="animate-spin" size={18} />
+              <span>Transfiriendo archivos a la nube...</span>
+            </>
+          ) : (
+            <>
+              <Plus size={18} /> Añadir al Portafolio Público
+            </>
+          )}
+        </button>
+      </form>
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border, #e5e7eb)', margin: '40px 0' }} />
+
+      {/* MÓDULO GRID DE VISUALIZACIÓN MULTIMEDIA */}
+      <h4 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '20px', color: 'var(--text-main, #111827)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        Contenido en Exhibición ({items.length})
+      </h4>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '20px' }}>
+        {items.map(img => (
+          <div 
+            key={img.id} 
+            style={{ 
+              position: 'relative', 
+              borderRadius: '14px', 
+              overflow: 'hidden', 
+              height: '140px', 
+              border: '1px solid var(--border, #e5e7eb)',
+              background: '#050505',
+              boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))'
+            }} 
+            className="galeria-admin-card"
+          >
+            {img.tipo === 'video' ? (
+              <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                <video src={img.imagen} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} />
+                <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.65)', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', color: '#fff', fontSize: '11px', fontWeight: '600' }}>
+                  <Film size={12} /> VÍDEO
+                </div>
+              </div>
+            ) : (
+              <img src={img.imagen} alt="Elemento de Galeria" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            )}
+
+            {/* BOTÓN OVERLAY DE ELIMINACIÓN */}
+            <button 
+              onClick={() => handleEliminarItem(img.id)}
+              style={{ 
+                position: 'absolute', 
+                top: '10px', 
+                right: '10px', 
+                background: 'var(--danger, #ef4444)', 
+                color: '#ffffff', 
+                padding: '6px', 
+                borderRadius: '50%', 
+                boxShadow: '0 4px 10px rgba(220, 53, 69, 0.3)',
+                border: 'none',
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              className="trash-overlay-btn"
+              title="Remover permanentemente"
+            >
+              <Trash2 size={14} />
             </button>
           </div>
-        )}
+        ))}
       </div>
 
-      {/* Lista */}
-      {loading ? <div className="loading-spinner" /> : (
-        <div className="galeria-admin-grid">
-          {items.length === 0 ? (
-            <div className="empty-admin">No hay archivos en la galería.</div>
-          ) : items.map(item => (
-            <div key={item.id} className="galeria-admin-item">
-              {item.tipo === 'video' ? (
-                <video src={item.url} className="galeria-admin-media" />
-              ) : (
-                <img src={item.url} alt={item.titulo} className="galeria-admin-media" loading="lazy" />
-              )}
-              <div className="galeria-admin-overlay">
-                <span className="galeria-admin-name">{item.titulo}</span>
-                <button className="delete-fab" onClick={() => handleDelete(item)}>🗑️</button>
-              </div>
-              <div className="galeria-admin-type">
-                {item.tipo === 'video' ? '🎬' : '📸'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* ESTILOS INTERACTIVOS FLUIDOS INYECTADOS */}
       <style>{`
-        .admin-section { display: flex; flex-direction: column; gap: 24px; }
-        .admin-section-header { display: flex; align-items: center; justify-content: space-between; }
-        .section-count { color: var(--text3); font-size: 0.88rem; }
-        .admin-form-card {
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          padding: 28px;
+        .galeria-admin-card {
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s;
         }
-        .form-card-title { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
-
-        .upload-zone {
-          border: 2px dashed var(--border2);
-          border-radius: var(--radius-lg);
-          min-height: 180px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: border-color var(--transition);
-          overflow: hidden;
-          padding: 16px;
+        .galeria-admin-card:hover {
+          transform: translateY(-2px) scale(1.02);
+          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05) !important;
         }
-        .upload-zone:hover { border-color: var(--teal); }
-        .upload-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 10px;
-          color: var(--text3);
-          text-align: center;
+        .trash-overlay-btn:hover {
+          background: var(--danger-hover, #dc2626) !important;
+          transform: scale(1.12);
         }
-        .upload-hint { font-size: 0.78rem; }
-        .upload-previews-grid {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        .upload-preview-item {
-          width: 100px;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          align-items: center;
-        }
-        .up-thumb { width: 100px; height: 80px; object-fit: cover; border-radius: 8px; }
-        .up-progress {
-          height: 4px;
-          width: 100%;
-          background: var(--border);
-          border-radius: 2px;
-          overflow: hidden;
-        }
-        .up-progress-fill { height: 100%; background: var(--teal); transition: width 0.3s; }
-        .up-name { font-size: 0.7rem; color: var(--text3); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
-
-        .upload-controls {
-          display: flex;
-          gap: 16px;
-          align-items: flex-end;
-          margin-top: 16px;
-          flex-wrap: wrap;
-        }
-
-        /* Galeria grid admin */
-        .galeria-admin-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 12px;
-        }
-        .galeria-admin-item {
-          position: relative;
-          border-radius: var(--radius);
-          overflow: hidden;
-          aspect-ratio: 1;
-          background: var(--surface);
-          border: 1px solid var(--border);
-        }
-        .galeria-admin-media { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .galeria-admin-overlay {
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          background: linear-gradient(transparent, rgba(0,0,0,0.8));
-          padding: 8px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          opacity: 0;
-          transition: opacity var(--transition);
-        }
-        .galeria-admin-item:hover .galeria-admin-overlay { opacity: 1; }
-        .galeria-admin-name { font-size: 0.72rem; color: white; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .delete-fab {
-          background: rgba(255,77,109,0.8);
-          border: none;
-          border-radius: 6px;
-          padding: 4px 8px;
-          cursor: pointer;
-          font-size: 0.8rem;
-          flex-shrink: 0;
-        }
-        .galeria-admin-type {
-          position: absolute;
-          top: 8px; right: 8px;
-          font-size: 0.85rem;
-          background: rgba(0,0,0,0.6);
-          border-radius: 6px;
-          padding: 2px 6px;
-        }
-        .empty-admin { text-align: center; color: var(--text3); padding: 40px; grid-column: 1/-1; }
       `}</style>
     </div>
   );

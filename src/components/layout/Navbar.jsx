@@ -152,7 +152,7 @@ export default function Navbar() {
           display: 'flex', flexDirection: 'column', gap: '12px', boxSizing: 'border-box'
         }}>
           <Link to="/noticias" style={estiloLink('/noticias')}>Noticias</Link>
-          <Link to="/chismes" style={estiloLink('/chismes')}>Chismes</Link>
+          <Link to="/foro" style={estiloLink('/foro')}>Foro</Link>
           <Link to="/galeria" style={estiloLink('/galeria')}>Galería</Link>
 
           <div style={{ height: '1px', background: 'var(--border)', margin: '10px 0' }} />

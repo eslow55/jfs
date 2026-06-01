@@ -17,15 +17,12 @@ const HomeSkeleton = () => (
   </div>
 );
 
-// FUNCIÓN RECOLECTORA ANTIFALLOS: Escanea todo el objeto buscando cualquier URL de imagen válida
 const extraerImagenDeFormaSegura = (data) => {
   if (!data) return null;
-  // 1. Intento con nombres de campos estándar conocidos
   const camposComunes = [data.imagen, data.urlImagen, data.imageUrl, data.multimedia, data.foto, data.url, data.banner];
   for (const valor of camposComunes) {
     if (typeof valor === 'string' && valor.trim() !== '') return valor;
   }
-  // 2. Contingencia extrema: Buscar cualquier string que empiece con http en el documento
   for (const propiedad in data) {
     const stringPosible = data[propiedad];
     if (typeof stringPosible === 'string' && (stringPosible.startsWith('http://') || stringPosible.startsWith('https://'))) {
@@ -51,7 +48,9 @@ export default function Home() {
 
   // Sincronización en Tiempo Real con Firebase
   useEffect(() => {
-    const qNoticias = query(collection(db, 'noticias'), orderBy('fecha', 'desc'), limit(6));
+    // TIP: Subimos el límite a 12 o 15 para asegurar que si hay noticias viejas fijadas, entren en el snapshot
+    const qNoticias = query(collection(db, 'noticias'), orderBy('fecha', 'desc'), limit(15));
+    
     const unsubNoticias = onSnapshot(qNoticias, (snapshot) => {
       setNoticias(snapshot.docs.map(doc => {
         const data = doc.data();
@@ -71,10 +70,11 @@ export default function Home() {
 
     const qGaleria = query(collection(db, 'galeria'), orderBy('fecha', 'desc'), limit(9));
     const unsubGaleria = onSnapshot(qGaleria, (snapshot) => {
-      setGaleria(snapshot.docs.map(doc => {
-        const data = doc.data();
-        return { id: doc.id, ...data, urlDefinitiva: data.imagen || data.url || '' };
-      }));
+      const data = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return { id: doc.id, ...d, urlDefinitiva: d.imagen || d.url || '' };
+      });
+      setGaleria(data);
     }, (error) => console.error("Error galería:", error));
 
     const qNosotros = query(collection(db, 'nosotros'), limit(1));
@@ -91,18 +91,34 @@ export default function Home() {
     };
   }, []);
 
-  // Determinar Artículo Destacado (Por visualizaciones o el primero de la lista)
-  const featured = useMemo(() => {
-    if (!noticias.length) return null;
-    return [...noticias].sort((a, b) => (b.views || 0) - (a.views || 0))[0];
+  // ==========================================================================
+  // LÓGICA DE ORDENAMIENTO CORREGIDA PARA ARTÍCULOS FIJADOS
+  // ==========================================================================
+  const noticiasOrdenadas = useMemo(() => {
+    return [...noticias].sort((a, b) => {
+      // 1. Prioridad Máxima: Si uno está fijado y el otro no
+      const aFijado = a.fijado === true || a.isPinned === true;
+      const bFijado = b.fijado === true || b.isPinned === true;
+      
+      if (aFijado && !bFijado) return -1;
+      if (!aFijado && bFijado) return 1;
+      
+      // 2. Criterio de desempate: Si ambos están fijados o ambos no lo están, decide el de más vistas
+      return (b.views || 0) - (a.views || 0);
+    });
   }, [noticias]);
 
-  // Filtrar artículos secundarios
+  // El primero de la lista ordenada con la nueva prioridad será el destacado (Hero)
+  const featured = useMemo(() => {
+    return noticiasOrdenadas[0] || null;
+  }, [noticiasOrdenadas]);
+
+  // Las secundarias toman los siguientes 4 puestos de la lista ya procesada
   const noticiasSecundarias = useMemo(() => {
-    if (!noticias.length) return [];
+    if (!noticiasOrdenadas.length) return [];
     const idDestacado = featured?.id;
-    return noticias.filter(n => n.id !== idDestacado).slice(0, 4);
-  }, [noticias, featured]);
+    return noticiasOrdenadas.filter(n => n.id !== idDestacado).slice(0, 4);
+  }, [noticiasOrdenadas, featured]);
 
   const formatearFecha = (timestamp) => {
     if (!timestamp) return 'Reciente';
@@ -115,9 +131,7 @@ export default function Home() {
   return (
     <div style={{ width: '100%', minHeight: '100vh', background: 'var(--bg-primary, #ffffff)', color: 'var(--text-main, #111827)', paddingBottom: '80px', overflowX: 'hidden', boxSizing: 'border-box', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
-      {/* ==========================================================================
-          HERO SECTION REESTRUCTURADO (CON ETIQUETA <img> NATIVA ABSOLUTA)
-          ========================================================================== */}
+      {/* HERO SECTION */}
       <section style={{ padding: isMobile ? '24px 16px' : '40px 32px' }}>
         <div style={{ 
           maxWidth: '1400px', 
@@ -128,13 +142,12 @@ export default function Home() {
           display: 'flex', 
           alignItems: 'flex-end', 
           padding: isMobile ? '32px 24px' : '64px', 
-          position: 'relative', // Obligatorio para contener la imagen y la capa oscura
-          background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', // Fondo de respaldo sólido
+          position: 'relative',
+          background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
           boxShadow: 'var(--shadow, 0 10px 25px -5px rgba(0,0,0,0.1))',
           border: '1px solid var(--border, #e5e7eb)'
         }} className="hero-banner">
           
-          {/* 1. RENDERIZADO HTML NATIVO DE LA PORTADA DESTACADA */}
           {featured?.fotoDefinitiva && (
             <img 
               src={featured.fotoDefinitiva} 
@@ -146,7 +159,7 @@ export default function Home() {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                zIndex: 1 // Capa más baja
+                zIndex: 1
               }}
               onError={(e) => {
                 console.error("Error cargando la imagen del Hero, usando respaldo.");
@@ -155,7 +168,6 @@ export default function Home() {
             />
           )}
 
-          {/* 2. FILTRO GRADIENTE OSCURO PARA LA LEGIBILIDAD DEL TEXTO */}
           <div style={{
             position: 'absolute',
             top: 0,
@@ -163,14 +175,36 @@ export default function Home() {
             right: 0,
             bottom: 0,
             background: 'linear-gradient(to top, rgba(10, 10, 15, 0.98) 15%, rgba(10, 10, 15, 0.5) 65%, rgba(0, 0, 0, 0.2) 100%)',
-            zIndex: 2 // Capa intermedia
+            zIndex: 2
           }} />
 
-          {/* 3. CONTENEDOR DE CONTENIDO DEL HERO */}
           <div style={{ maxWidth: '850px', position: 'relative', zIndex: 3 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(59, 130, 246, 0.25)', border: '1px solid rgba(59, 130, 246, 0.4)', color: '#60a5fa', padding: '6px 14px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', letterSpacing: '1.2px', marginBottom: '20px', textTransform: 'uppercase' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} /> Editorial Destacada
+            {/* ETIQUETA DINÁMICA: Cambia visualmente si está fijado */}
+            <div style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              background: featured?.fijado || featured?.isPinned ? 'rgba(234, 179, 8, 0.25)' : 'rgba(59, 130, 246, 0.25)', 
+              border: featured?.fijado || featured?.isPinned ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)', 
+              color: featured?.fijado || featured?.isPinned ? '#facc15' : '#60a5fa', 
+              padding: '6px 14px', 
+              borderRadius: '20px', 
+              fontSize: '11px', 
+              fontWeight: '800', 
+              letterSpacing: '1.2px', 
+              marginBottom: '20px', 
+              textTransform: 'uppercase' 
+            }}>
+              <span style={{ 
+                width: '6px', 
+                height: '6px', 
+                borderRadius: '50%', 
+                background: featured?.fijado || featured?.isPinned ? '#eab308' : '#3b82f6', 
+                display: 'inline-block' 
+              }} /> 
+              {featured?.fijado || featured?.isPinned ? '📌 Anuncio Fijado' : 'Editorial Destacada'}
             </div>
+
             <h1 style={{ fontSize: isMobile ? '32px' : '52px', margin: '0 0 16px 0', lineHeight: '1.15', fontWeight: '850', color: '#ffffff', letterSpacing: '-1.5px' }}>
               {featured?.titulo || 'Bienvenidos a la Comunidad'}
             </h1>
@@ -186,18 +220,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ==========================================================================
-          MÓDULO CENTRAL ASIMÉTRICO (PRENSA, DISCUSIONES Y CAPTURAS)
-          ========================================================================== */}
-      <main style={{ 
-        maxWidth: '1400px', 
-        margin: '0 auto', 
-        padding: isMobile ? '0 16px' : '0 32px', 
-        display: 'grid', 
-        gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', 
-        gap: '48px',
-        boxSizing: 'border-box'
-      }}>
+      {/* MÓDULO CENTRAL ASIMÉTRICO */}
+      <main style={{ maxWidth: '1400px', margin: '0 auto', padding: isMobile ? '0 16px' : '0 32px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 400px', gap: '48px', boxSizing: 'border-box' }}>
         
         {/* COLUMNA IZQUIERDA: COMUNICADOS SECUNDARIOS */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
@@ -215,7 +239,15 @@ export default function Home() {
               <p style={{ color: 'var(--text-muted, #6b7280)', fontSize: '14px', fontStyle: 'italic' }}>No hay comunicados adicionales.</p>
             ) : (
               noticiasSecundarias.map(n => (
-                <article key={n.id} className="home-card" style={{ borderRadius: '24px', border: '1px solid var(--border, #e5e7eb)', background: 'var(--bg-secondary, #f9fafb)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))' }}>
+                <article key={n.id} className="home-card" style={{ borderRadius: '24px', border: '1px solid var(--border, #e5e7eb)', background: 'var(--bg-secondary, #f9fafb)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))', position: 'relative' }}>
+                  
+                  {/* Pequeño indicador pin flotante si está fijado pero no alcanzó el Hero */}
+                  {(n.fijado || n.isPinned) && (
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#eab308', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', zIndex: 5, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      📌 Fijado
+                    </div>
+                  )}
+
                   {n.fotoDefinitiva && (
                     <div style={{ height: '180px', overflow: 'hidden', background: '#000' }}>
                       <img src={n.fotoDefinitiva} alt={n.titulo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
@@ -242,7 +274,6 @@ export default function Home() {
 
         {/* COLUMNA DERECHA: ASIDE INTERACTIVO */}
         <aside style={{ display: 'flex', flexDirection: 'column', gap: '48px' }}>
-          
           {/* FORO */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '16px' }}>

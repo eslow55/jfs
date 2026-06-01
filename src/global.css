@@ -1,88 +1,115 @@
 /* ==========================================================================
-   VARIABLES DE DISEÑO - MODO CLARO (MINIMALISMO TECNOLÓGICO PREMIUM)
+   VARIABLES DE DISEÑO - SISTEMA DE TOKENS (PRODUCCIÓN PREMIUM)
    ========================================================================== */
 :root {
-  --bg-primary: #f3f4f6;       /* Fondo gris claro mate texturizado */
-  --bg-secondary: #ffffff;     /* Blanco puro para que las tarjetas resalten y floten */
-  --bg-input: #e5e7eb;         /* Gris suave para los campos de texto */
-  --accent: #00b359;           /* Verde sólido de alta legibilidad en fondo claro */
-  --accent-hover: #009e4f;
+  /* Modo Claro - Minimalismo Tecnológico */
+  --bg-primary: #f8fafc;        /* Slate 50: Fondo ultra limpio y descansado */
+  --bg-secondary: #ffffff;      /* Blanco puro para capas flotantes (cards, nav) */
+  --bg-input: #f1f5f9;          /* Slate 100: Campos de texto perfectamente integrados */
+  
+  /* Paleta Verde Inteligente (Inspirada en Spotify/Medium) */
+  --accent: #1db954;            /* Verde esmeralda vibrante pero controlado */
+  --accent-hover: #1aa34a;      /* Contraste óptimo para interacciones */
+  --accent-rgb: 29, 185, 84;    /* Canal alfa para sombras y focos dinámicos */
+  
   --button-text: #ffffff;      
-  --text-main: #111827;        /* Negro profundo (estilo carbón) para títulos legibles */
-  --text-muted: #4b5563;       /* Gris medio corporativo para textos secundarios */
-  --border: #e5e7eb;           /* Líneas divisorias limpias y delgadas */
-  --border-hover: #d1d5db;
-  --danger: #dc3545;
-  --danger-hover: #bd2130;
+  --text-main: #0f172a;         /* Slate 900: Contraste tipográfico premium */
+  --text-muted: #64748b;        /* Slate 500: Textos secundarios y descripciones */
   
-  /* Sombra suave y difusa de alta gama */
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03); 
-  --transition-speed: 0.25s;
+  --border: #e2e8f0;            /* Slate 200: Separadores limpios y sutiles */
+  --border-hover: #cbd5e1;      /* Slate 300 */
+  
+  --danger: #ef4444;            /* Red 500: Errores con alto ratio de contraste */
+  --danger-hover: #dc2626;
+  --danger-rgb: 239, 68, 68;
+  
+  /* Elevación y Profundidad */
+  --shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.03), 0 10px 15px -3px rgba(15, 23, 42, 0.05);
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-full: 9999px;
+  
+  --transition-smooth: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                       border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                       color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                       box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                       transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ==========================================================================
-   VARIABLES DE DISEÑO - MODO OSCURO (PREMIUM DARK MATE)
-   ========================================================================== */
 [data-theme="dark"] {
-  --bg-primary: #0b0b0e;       /* Negro medianoche profundo */
-  --bg-secondary: #121216;     /* Gris oscuro mate para los bloques de tarjetas */
-  --bg-input: #1a1a22;         
-  --accent: #00ff87;           /* Verde neón brillante para contraste en la oscuridad */
-  --accent-hover: #00e074;
-  --button-text: #050505;      /* Texto oscuro dentro de botones neón */
-  --text-main: #f3f4f6;        
-  --text-muted: #9ca3af;       
-  --border: #1f1f24;           
-  --border-hover: #2d2d36;
-  --danger: #ff4a4a;
-  --danger-hover: #ff6b6b;
-  --shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+  /* Modo Oscuro - Dark Mate Premium (Evita el negro puro #000 para mitigar fatiga) */
+  --bg-primary: #09090b;        /* Zinc 950: Profundidad elegante */
+  --bg-secondary: #14141b;      /* Capa flotante con un sutil tinte azul noche */
+  --bg-input: #1d1d26;          
+  
+  /* Corrección de Verde Neón a Verde Eléctrico de Producción (Accesible) */
+  --accent: #10b981;            /* Emerald 500: Brillo sofisticado y legible sobre oscuro */
+  --accent-hover: #059669;      /* Emerald 600 */
+  --accent-rgb: 16, 185, 129;
+  
+  --button-text: #ffffff;       /* Texto blanco para garantizar accesibilidad (WCAG AA) */
+  --text-main: #f4f4f5;         /* Zinc 100: Texto suave para lectura nocturna */
+  --text-muted: #a1a1aa;        /* Zinc 400 */
+  
+  --border: #23232f;            
+  --border-hover: #2f2f3e;
+  
+  --danger: #f87171;            /* Red 400 */
+  --danger-hover: #ef4444;
+  --danger-rgb: 248, 113, 113;
+  
+  --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
 }
 
 /* ==========================================================================
-   RESETEO GLOBAL, TIPOGRAFÍA E INTERACTIVIDAD FLUIDA
+   RESETEO OPTIMIZADO Y RENDIMIENTO
    ========================================================================== */
-* {
+*, *::before, *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  
-  /* Transición calibrada para que el cambio de tema parezca líquido */
-  transition: background-color var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1), 
-              border-color var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1), 
-              color var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reducción drástica del alcance de transiciones para optimizar el renderizado */
+html, body, div, header, nav, section, article, aside, footer {
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
   background-color: var(--bg-primary);
   color: var(--text-main);
-  line-height: 1.5;
+  font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-/* Scrollbar minimalista integrada */
+/* Scrollbar invisible pero funcional al scroll */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-hover);
-  border-radius: 20px;
+  border-radius: var(--radius-full);
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: #2d2d36;
+  background: var(--border);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 a {
   color: inherit;
   text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: var(--transition-smooth);
 }
 
 /* ==========================================================================
@@ -96,57 +123,53 @@ textarea {
   color: var(--text-main);
   border: 1px solid var(--border);
   padding: 14px 18px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-size: 15px;
   width: 100%;
   outline: none;
-  transition: all 0.2s ease;
+  box-sizing: border-box;
+  transition: var(--transition-smooth);
 }
 
 input:focus, 
 textarea:focus {
   border-color: var(--accent);
   background-color: var(--bg-secondary);
-  box-shadow: 0 0 0 4px rgba(0, 179, 89, 0.1);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
 }
 
-[data-theme="dark"] input:focus, 
-[data-theme="dark"] textarea:focus {
-  box-shadow: 0 0 0 4px rgba(0, 255, 135, 0.15);
+/* Placeholder unificado y elegante */
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 /* ==========================================================================
-   BOTONES ESTRUCTURALES
+   BOTONES Y ACCIONES (BOTONERA DE ALTA GAMA)
    ========================================================================== */
 button, .btn-primary {
   background: var(--accent);
   color: var(--button-text);
   font-weight: 600;
   font-size: 14px;
+  letter-spacing: -0.01em;
   padding: 12px 26px;
-  border-radius: 50px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(0, 179, 89, 0.15);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-[data-theme="dark"] button {
-  box-shadow: 0 4px 15px rgba(0, 255, 135, 0.2);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.18);
+  transition: var(--transition-smooth);
+  will-change: transform; /* Prepara a la GPU para animaciones fluidas */
 }
 
 button:hover {
   background: var(--accent-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 179, 89, 0.25);
-}
-
-[data-theme="dark"] button:hover {
-  box-shadow: 0 6px 22px rgba(0, 255, 135, 0.35);
+  box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.28);
 }
 
 button:active { 
@@ -154,19 +177,31 @@ button:active {
 }
 
 button:disabled { 
-  opacity: 0.4; 
+  opacity: 0.5; 
   cursor: not-allowed; 
   transform: none !important; 
   box-shadow: none !important;
 }
 
-/* ==========================================================================
-   UTILIDADES Y ANIMACIONES DE SOPORTE (SKELETONS Y SPINNERS)
-   ========================================================================== */
-.animate-spin {
-  animation: spin 1s linear infinite;
+/* Variante de botón de Peligro / Eliminar */
+.btn-danger {
+  background: var(--danger);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(var(--danger-rgb), 0.15);
+}
+.btn-danger:hover {
+  background: var(--danger-hover);
+  box-shadow: 0 6px 20px rgba(var(--danger-rgb), 0.25);
 }
 
+/* ==========================================================================
+   ANIMACIONES DE ALTA EFICIENCIA
+   ========================================================================== */
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Optimización con translate3d para activar la aceleración por hardware */
 @keyframes spin {
   from {
     transform: rotate(0deg);

@@ -13,9 +13,9 @@ import Footer from './components/layout/Footer';
 import Home from './pages/Home';
 import Noticias from './pages/Noticias';
 import NoticiaDetalle from './pages/NoticiaDetalle'; 
-import Foro from './pages/Foro'; 
+import Foro from './pages/Foro'; /* <--- Importado como Foro */
 import Galeria from './pages/Galeria';
-import SobreNosotros from './pages/SobreNosotros'; // <-- INTEGRADA: Vista Institucional del Footer
+import SobreNosotros from './pages/SobreNosotros'; 
 import Login from './pages/Login';
 import Admin from './components/admin/Admin';
 
@@ -24,7 +24,6 @@ function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    // Sube la pantalla al inicio instantáneamente al cambiar de página
     window.scrollTo(0, 0);
   }, [pathname]);
 
@@ -76,7 +75,7 @@ function LayoutEstructurado({ children }) {
       transition: 'background-color 0.3s ease, color 0.3s ease' 
     }}>
       
-      {/* NAVBAR: Modulable según entorno */}
+      {/* NAVBAR */}
       <div style={{ 
         transform: esAdmin ? 'scale(0.98)' : 'none', 
         transition: 'transform 0.3s ease',
@@ -86,7 +85,7 @@ function LayoutEstructurado({ children }) {
         <Navbar />
       </div>
       
-      {/* CONTENEDOR DE CONTENIDO VARIABLE */}
+      {/* CONTENEDOR VARIABLE */}
       <main style={{ 
         flex: 1, 
         padding: esAdmin ? '0' : '0 0 60px 0', 
@@ -117,7 +116,6 @@ export default function App() {
     <TemaProvider>
       <AuthProvider>
         <Router>
-          {/* Inicializador del reset de scroll */}
           <ScrollToTop />
           
           <LayoutEstructurado>
@@ -129,12 +127,11 @@ export default function App() {
               {/* Ruta Dinámica para la Lectura de Crónicas Individuales */}
               <Route path="/noticias/:id" element={<NoticiaDetalle />} />
               
-              <Route path="/foro" element={<Forum />} />
+              {/* CORREGIDO AQUÍ: Vinculado correctamente con el componente Foro */}
+              <Route path="/foro" element={<Foro />} />
+              
               <Route path="/galeria" element={<Galeria />} />
-              
-              {/* Nueva Ruta Institucional vinculada al Footer */}
               <Route path="/SobreNosotros" element={<SobreNosotros />} />
-              
               <Route path="/login" element={<Login />} />
               
               {/* Panel de administración protegido */}

@@ -94,7 +94,7 @@ export default function Noticias() {
 
     let nuevosFavs = [...favoritos];
     if (nuevosFavs.includes(id)) {
-      nuevosFavs = nuevosFavs.filter(favId => favId !== id);
+      nuevsFavs = nuevosFavs.filter(favId => favId !== id);
     } else {
       nuevosFavs.push(id);
     }
@@ -107,6 +107,8 @@ export default function Noticias() {
   const noticiasFiltradas = useMemo(() => {
     const busquedaLimpia = busqueda.toLowerCase().trim();
     return noticias.filter(n => {
+      if (!n || !n.id) return false; // Protección contra documentos corruptos
+      
       // Discriminador por pestaña activa (Todas vs Guardadas)
       if (filtroActivo === 'guardadas' && !favoritos.includes(n.id)) {
         return false;
@@ -121,8 +123,12 @@ export default function Noticias() {
 
   const formatearFecha = (data) => {
     if (!data) return 'Reciente';
-    const date = data.toDate ? data.toDate() : new Date(data);
-    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    try {
+      const date = data.toDate ? data.toDate() : new Date(data);
+      return isNaN(date.getTime()) ? 'Reciente' : date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    } catch (e) {
+      return 'Reciente';
+    }
   };
 
   return (
@@ -217,8 +223,6 @@ export default function Noticias() {
                 <Link 
                   key={noticia.id} 
                   to={`/noticias/${noticia.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   style={{ 
                     background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '24px', 
                     overflow: 'hidden', textDecoration: 'none', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -249,7 +253,7 @@ export default function Noticias() {
                     <div style={{ height: '190px', width: '100%', overflow: 'hidden', borderBottom: '1px solid var(--border)', background: '#0a0a0c' }}>
                       <img 
                         src={noticia.fotoDefinitiva} 
-                        alt={noticia.titulo} 
+                        alt={noticia.titulo || "Imagen de noticia"} 
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.4s ease' }} 
                         className="card-image"
                         loading="lazy"

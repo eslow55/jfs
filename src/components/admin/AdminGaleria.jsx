@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, onSnapshot, orderBy, query, deleteDoc, doc } from 'firebase/firestore';
-import { Plus, Trash2, Loader2, UploadCloud, X, Film, ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Loader2, UploadCloud, X, Film } from 'lucide-react';
 
 export default function AdminGaleria() {
   const [items, setItems] = useState([]);
@@ -68,7 +68,6 @@ export default function AdminGaleria() {
     if (!res.ok) throw new Error('Error al procesar la subida multimedia.');
     const data = await res.json();
     
-    // Retornamos tanto la URL segura como el ID público para futuras eliminaciones
     return {
       url: data.secure_url,
       publicId: data.public_id
@@ -84,10 +83,9 @@ export default function AdminGaleria() {
       const uploadResult = await uploadToCloudinary();
 
       if (uploadResult) {
-        // Almacenamiento unificado en Firestore incluyendo el publicId de Cloudinary
         await addDoc(collection(db, 'galeria'), {
           imagen: uploadResult.url, 
-          publicId: uploadResult.publicId, // Guardado estratégico
+          publicId: uploadResult.publicId,
           tipo: fileType,
           fecha: new Date().toISOString()
         });
@@ -105,13 +103,7 @@ export default function AdminGaleria() {
   const handleEliminarItem = async (id, publicId) => {
     if (window.confirm('¿Deseas remover este recurso de la galería global de forma permanente?')) {
       try {
-        // 1. Eliminación del documento en Firestore
         await deleteDoc(doc(db, 'galeria', id));
-        
-        // 2. Nota técnica de infraestructura:
-        // Para borrar de Cloudinary directamente desde el cliente por API Rest sin exponer tus llaves secretas (API Secret),
-        // se requiere un token generado desde backend. Si no dispones de servidor, puedes orquestar el borrado manual 
-        // en tu panel de Cloudinary usando el `publicId` guardado o mediante una Cloud Function de Firebase en producción.
         if (publicId) {
           console.log(`Recurso con Public ID: ${publicId} desvinculado de la base de datos.`);
         }
@@ -124,6 +116,7 @@ export default function AdminGaleria() {
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: 'var(--text-main, #111827)' }}>
+      
       {/* CABECERA DEL MÓDULO */}
       <div style={{ borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '20px', marginBottom: '32px' }}>
         <h3 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-main, #111827)', margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
@@ -138,7 +131,7 @@ export default function AdminGaleria() {
       <form onSubmit={handleSubirItem} style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '40px' }}>
         <div style={{ width: '100%' }}>
           {!previewUrl ? (
-            /* Área de Carga Dropzone */
+            /* Área de Carga Dropzone Responsive */
             <div 
               onClick={() => fileInputRef.current.click()}
               onMouseEnter={(e) => {
@@ -149,11 +142,10 @@ export default function AdminGaleria() {
                 e.currentTarget.style.borderColor = 'var(--border, #d1d5db)';
                 e.currentTarget.style.background = 'var(--bg-primary, #f9fafb)';
               }}
+              className="gallery-dropzone"
               style={{
                 border: '2px dashed var(--border, #d1d5db)',
                 borderRadius: '16px',
-                padding: '48px 24px',
-                textAlign: 'center',
                 background: 'var(--bg-primary, #f9fafb)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
@@ -177,20 +169,20 @@ export default function AdminGaleria() {
                 <UploadCloud size={26} style={{ color: 'var(--text-muted, #9ca3af)' }} />
               </div>
 
-              <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-main, #111827)' }}>
+              <p className="dropzone-text-main" style={{ margin: 0, fontWeight: '700', color: 'var(--text-main, #111827)' }}>
                 Selecciona una foto o video desde tu dispositivo
               </p>
-              <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: 'var(--text-muted, #6b7280)' }}>
+              <p className="dropzone-text-sub" style={{ margin: '6px 0 0 0', color: 'var(--text-muted, #6b7280)' }}>
                 Formatos aceptados: PNG, JPG, WEBP, MP4 o MOV (Max 10MB)
               </p>
             </div>
           ) : (
-            /* Previsualizador cuando hay archivo */
-            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border, #e5e7eb)', background: '#0b0b0e', maxHeight: '360px', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+            /* Previsualizador con protección de altura en móviles */
+            <div className="gallery-preview-box" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border, #e5e7eb)', background: '#0b0b0e', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
               {fileType === 'video' ? (
-                <video src={previewUrl} controls style={{ maxHeight: '360px', width: '100%', objectFit: 'contain' }} />
+                <video src={previewUrl} controls style={{ width: '100%', objectFit: 'contain' }} className="preview-media" />
               ) : (
-                <img src={previewUrl} alt="Preview temporal" style={{ maxHeight: '360px', width: '100%', objectFit: 'contain' }} />
+                <img src={previewUrl} alt="Preview temporal" style={{ width: '100%', objectFit: 'contain' }} className="preview-media" />
               )}
               
               <button 
@@ -202,7 +194,8 @@ export default function AdminGaleria() {
                   border: 'none', borderRadius: '50%', width: '36px', height: '36px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', transition: 'background 0.2s, transform 0.1s',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  zIndex: 10
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = '#ef4444'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(15, 15, 20, 0.85)'}
@@ -218,19 +211,20 @@ export default function AdminGaleria() {
         <button 
           type="submit" 
           disabled={cargando || !file} 
+          className="gallery-submit-btn"
           style={{ 
-            alignSelf: 'flex-start', borderRadius: '12px', padding: '14px 28px',
+            borderRadius: '12px', padding: '14px 28px',
             background: (cargando || !file) ? 'var(--text-muted, #9ca3af)' : 'var(--accent, #10b981)',
             color: '#fff', border: 'none', fontWeight: '700', fontSize: '14.5px',
             cursor: (cargando || !file) ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-            transition: 'all 0.2s ease', boxShadow: (cargando || !file) ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)'
+            transition: 'all 0.2s ease'
           }}
         >
           {cargando ? (
             <>
               <Loader2 className="animate-spin" size={18} />
-              <span>Transfiriendo archivos a la nube...</span>
+              <span>Transfiriendo archivos...</span>
             </>
           ) : (
             <>
@@ -247,12 +241,12 @@ export default function AdminGaleria() {
         Contenido en Exhibición ({items.length})
       </h4>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '20px' }}>
+      <div className="gallery-responsive-grid">
         {items.map(img => (
           <div 
             key={img.id} 
             style={{ 
-              position: 'relative', borderRadius: '14px', overflow: 'hidden', height: '140px', 
+              position: 'relative', borderRadius: '14px', overflow: 'hidden', 
               border: '1px solid var(--border, #e5e7eb)', background: '#050505',
               boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))'
             }} 
@@ -275,10 +269,11 @@ export default function AdminGaleria() {
                 position: 'absolute', top: '10px', right: '10px', 
                 background: 'var(--danger, #ef4444)', color: '#ffffff', 
                 padding: '6px', borderRadius: '50%', border: 'none',
-                width: '30px', height: '30px', display: 'flex',
+                width: '32px', height: '32px', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', transition: 'all 0.2s ease',
-                boxShadow: '0 4px 10px rgba(220, 53, 69, 0.3)'
+                boxShadow: '0 4px 10px rgba(220, 53, 69, 0.3)',
+                zIndex: 5
               }}
               className="trash-overlay-btn"
               title="Remover permanentemente"
@@ -289,17 +284,92 @@ export default function AdminGaleria() {
         ))}
       </div>
 
+      {/* COMPLEMENTOS MULTI-PLATAFORMA (CSS) */}
       <style>{`
+        /* Configuración de Escritorio Extendido */
+        .gallery-dropzone {
+          padding: 48px 24px;
+        }
+        .dropzone-text-main { fontSize: 15px; }
+        .dropzone-text-sub { fontSize: 12.5px; }
+        
+        .gallery-preview-box { maxHeight: 360px; }
+        .preview-media { maxHeight: 360px; }
+        
+        .gallery-submit-btn {
+          align-self: flex-start;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        }
+        
+        /* Grid inteligente por defecto */
+        .gallery-responsive-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 20px;
+        }
+        .galeria-admin-card {
+          height: 150px;
+        }
+
+        /* Hover animations */
         .galeria-admin-card {
           transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s;
         }
         .galeria-admin-card:hover {
-          transform: translateY(-2px) scale(1.02);
+          transform: translateY(-3px) scale(1.02);
           box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05) !important;
         }
+        .trash-overlay-btn {
+          transition: all 0.2s ease;
+        }
         .trash-overlay-btn:hover {
-          background: var(--danger-hover, #dc2626) !important;
+          background: #dc2626 !important;
           transform: scale(1.12);
+        }
+
+        /* --- BREAKPOINT PARA TABLETS (max-width: 768px) --- */
+        @media (max-width: 768px) {
+          .gallery-dropzone {
+            padding: 36px 16px;
+          }
+          .gallery-submit-btn {
+            align-self: stretch; /* Botón a ancho completo */
+            width: 100%;
+          }
+          .gallery-responsive-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Columnas un poco más angostas */
+            gap: 12px;
+          }
+          .galeria-admin-card {
+            height: 120px; /* Reducción de tamaño del card para que entren más en pantalla */
+          }
+        }
+
+        /* --- BREAKPOINT PARA DISPOSITIVOS MÓVILES (max-width: 480px) --- */
+        @media (max-width: 480px) {
+          .gallery-dropzone {
+            padding: 24px 12px;
+          }
+          .dropzone-text-main { 
+            fontSize: 13.5px; 
+          }
+          .dropzone-text-sub { 
+            display: none; /* Simplifica espacio removiendo el texto secundario en teléfonos */
+          }
+          .gallery-preview-box, .preview-media { 
+            max-height: 240px; /* Reduce la altura máxima de previsualización en smartphones */
+          }
+          .gallery-responsive-grid {
+            grid-template-columns: repeat(2, 1fr); /* Fuerza un layout exacto de 2 columnas simétricas */
+            gap: 10px;
+          }
+          .galeria-admin-card {
+            height: 110px;
+          }
+          .trash-overlay-btn {
+            width: 36px;  /* Botón ligeramente más grande en celular para facilitar el toque */
+            height: 36px;
+          }
         }
       `}</style>
     </div>

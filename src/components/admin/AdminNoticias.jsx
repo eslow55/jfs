@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from "../../firebase";
-import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, orderBy, query, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { PlusCircle, Trash2, Calendar, Eye, Loader2, CheckCircle, Star, Film, Image as ImageIcon, Upload, Link2, AlertCircle } from 'lucide-react';
 
-// CONFIGURACIÓN DE CLOUDINARY (Uso de variables de entorno de Vite)
+// CONFIGURACIÓN DE CLOUDINARY
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "TU_CLOUD_NAME"; 
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "TU_UPLOAD_PRESET"; 
 
@@ -20,12 +20,11 @@ export default function AdminNoticias() {
   const [destacada, setDestacada] = useState(false);
 
   // Estados para la subida local
-  const [tipoMetodo, setTipoMetodo] = useState('local'); // 'local' o 'link'
+  const [tipoMetodo, setTipoMetodo] = useState('local'); 
   const [archivoLocal, setArchivoLocal] = useState(null);
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Utilidades
   const esVideo = (url) => {
     if (!url) return false;
     const extensionesVideo = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
@@ -46,20 +45,19 @@ export default function AdminNoticias() {
     return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
   };
 
-  const cargarNoticias = async () => {
-    try {
-      const q = query(collection(db, 'noticias'), orderBy('fecha', 'desc'));
-      const querySnapshot = await getDocs(q);
-      setNoticias(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (error) {
-      console.error("Error al obtener noticias:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // SOLUCIÓN AL HOME: Sincronización en tiempo real usando onSnapshot en el Admin también
   useEffect(() => {
-    cargarNoticias();
+    const q = query(collection(db, 'noticias'), orderBy('fecha', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      setNoticias(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error al escuchar noticias en tiempo real:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const subirACloudinary = async (file) => {
@@ -125,7 +123,6 @@ export default function AdminNoticias() {
       setDestacada(false);
       setSuccess(true);
       
-      await cargarNoticias();
       setTimeout(() => setSuccess(false), 5000);
     } catch (error) {
       console.error("Error al publicar la noticia:", error);
@@ -150,7 +147,6 @@ export default function AdminNoticias() {
       } else {
         await updateDoc(doc(db, 'noticias', id), { destacada: false });
       }
-      await cargarNoticias();
     } catch (error) {
       console.error("Error cambiando el destacado:", error);
     }
@@ -160,7 +156,6 @@ export default function AdminNoticias() {
     if (!window.confirm("¿Seguro que deseas eliminar esta noticia definitivamente? Esta acción no se puede deshacer.")) return;
     try {
       await deleteDoc(doc(db, 'noticias', id));
-      setNoticias(noticias.filter(n => n.id !== id));
     } catch (error) {
       console.error("Error al borrar:", error);
     }
@@ -171,7 +166,6 @@ export default function AdminNoticias() {
     return imagenUrl;
   };
 
-  // ESTILOS REUTILIZABLES PARA PRODUCCIÓN
   const inputStyles = {
     width: '100%',
     padding: '12px 16px',
@@ -195,7 +189,7 @@ export default function AdminNoticias() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px', color: 'var(--text-main, #111827)', minHeight: '90vh', boxSizing: 'border-box', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ maxWidth: '1250px', margin: '0 auto', padding: '40px 24px', color: 'var(--text-main, #111827)', minHeight: '90vh', boxSizing: 'border-box', fontFamily: 'system-ui, -apple-system, sans-serif' }} className="admin-noticias-container">
       
       {/* HEADER */}
       <div style={{ borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '24px', marginBottom: '40px' }}>
@@ -207,10 +201,11 @@ export default function AdminNoticias() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth < 992 ? '1fr' : '450px 1fr', gap: '40px', alignItems: 'start' }}>
+      {/* DASHBOARD GRID RESPONSIVE */}
+      <div className="noticias-dashboard-grid">
         
         {/* ================= FORMULARIO DE CREACIÓN ================= */}
-        <form onSubmit={handleSubmit} style={{ background: 'var(--bg-secondary, #ffffff)', border: '1px solid var(--border, #e5e7eb)', padding: '32px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+        <form onSubmit={handleSubmit} style={{ background: 'var(--bg-secondary, #ffffff)', border: '1px solid var(--border, #e5e7eb)', padding: '32px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', boxSizing: 'border-box' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '16px' }}>
             <PlusCircle size={22} style={{ color: 'var(--accent, #10b981)' }} />
@@ -241,70 +236,32 @@ export default function AdminNoticias() {
             </div>
           </div>
 
-          {/* INPUT DEPENDIENDO DEL MÉTODO (DISEÑO MEJORADO) */}
+          {/* INPUT DEPENDIENDO DEL MÉTODO */}
           {tipoMetodo === 'local' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={labelStyles}>Selecciona Imagen o Video</label>
+              <input type="file" ref={fileInputRef} accept="image/*,video/*" onChange={(e) => setArchivoLocal(e.target.files[0] || null)} style={{ display: 'none' }} />
               
-              {/* Input Nativo Oculto */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                accept="image/*,video/*" 
-                onChange={(e) => setArchivoLocal(e.target.files[0] || null)} 
-                style={{ display: 'none' }} 
-              />
-              
-              {/* Contenedor Interactivo Estilizado */}
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--accent, #10b981)';
-                  e.currentTarget.style.background = 'rgba(16, 185, 129, 0.02)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = archivoLocal ? 'var(--accent, #10b981)' : 'var(--border, #d1d5db)';
-                  e.currentTarget.style.background = 'var(--bg-secondary, #ffffff)';
-                }}
                 style={{ 
-                  width: '100%', 
-                  padding: '24px 16px', 
-                  background: 'var(--bg-secondary, #ffffff)', 
+                  width: '100%', padding: '24px 16px', background: 'var(--bg-secondary, #ffffff)', 
                   border: `2px dashed ${archivoLocal ? 'var(--accent, #10b981)' : 'var(--border, #d1d5db)'}`, 
-                  borderRadius: '12px', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  textAlign: 'center',
-                  boxSizing: 'border-box'
+                  borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.2s ease', textAlign: 'center', boxSizing: 'border-box'
                 }}
+                className="dropzone-area"
               >
-                {/* Icono Condicional */}
-                <div style={{ 
-                  background: archivoLocal ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary, #f3f4f6)', 
-                  padding: '12px', 
-                  borderRadius: '50%', 
-                  marginBottom: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
+                <div style={{ background: archivoLocal ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary, #f3f4f6)', padding: '12px', borderRadius: '50%', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {archivoLocal ? (
                     esVideo(archivoLocal.name) ? <Film size={22} style={{ color: 'var(--accent, #10b981)' }} /> : <ImageIcon size={22} style={{ color: 'var(--accent, #10b981)' }} />
                   ) : (
                     <Upload size={22} style={{ color: 'var(--text-muted, #9ca3af)' }} />
                   )}
                 </div>
-
-                {/* Texto Principal */}
                 <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '700', color: archivoLocal ? 'var(--accent, #10b981)' : 'var(--text-main, #111827)' }}>
                   {archivoLocal ? '¡Archivo Cargado!' : 'Examinar archivos locales'}
                 </p>
-                
-                {/* Detalles / Nombre del archivo */}
                 <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-muted, #6b7280)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {archivoLocal ? archivoLocal.name : 'Arrastra o selecciona fotos/videos'}
                 </p>
@@ -317,7 +274,7 @@ export default function AdminNoticias() {
             </div>
           )}
 
-          {/* PREVISUALIZADOR INTELIGENTE */}
+          {/* PREVISUALIZADOR */}
           {(archivoLocal || imagenUrl.trim()) && (
             <div style={{ background: 'var(--bg-primary, #f9fafb)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border, #d1d5db)' }}>
               <p style={{ margin: '0 0 10px 0', fontSize: '11px', fontWeight: '700', color: 'var(--text-muted, #6b7280)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -337,7 +294,7 @@ export default function AdminNoticias() {
             </div>
           )}
 
-          {/* OPCIÓN INTERRUPTOR DESTACAR */}
+          {/* INTERRUPTOR DESTACAR */}
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: destacada ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-primary, #f9fafb)', padding: '16px', borderRadius: '12px', border: destacada ? '1px solid var(--accent, #10b981)' : '1px solid var(--border, #e5e7eb)', cursor: 'pointer', transition: 'all 0.2s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Star size={20} style={{ color: destacada ? 'var(--accent, #10b981)' : 'var(--text-muted, #9ca3af)' }} fill={destacada ? 'var(--accent, #10b981)' : 'transparent'} />
@@ -364,7 +321,7 @@ export default function AdminNoticias() {
           </button>
         </form>
 
-        {/* ================= LISTADO DE CONTROL ================= */}
+        {/* ================= LISTADO DE CONTROL HISTORIAL ================= */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h2 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: 'var(--text-main, #111827)' }}>Historial de Publicaciones</h2>
@@ -383,8 +340,8 @@ export default function AdminNoticias() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {noticias.map(n => (
-                <div key={n.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary, #ffffff)', border: n.destacada ? '1px solid var(--accent, #10b981)' : '1px solid var(--border, #e5e7eb)', padding: '16px', borderRadius: '12px', gap: '16px', justifyContent: 'space-between', transition: 'all 0.2s', boxShadow: n.destacada ? '0 4px 12px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: 0 }}>
+                <div key={n.id} className="noticia-item-card" style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-secondary, #ffffff)', border: n.destacada ? '1px solid var(--accent, #10b981)' : '1px solid var(--border, #e5e7eb)', padding: '16px', borderRadius: '12px', gap: '16px', justifyContent: 'space-between', transition: 'all 0.2s', boxShadow: n.destacada ? '0 4px 12px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(0,0,0,0.05)', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: 0 }} className="noticia-item-left">
                     
                     {/* MINIATURA */}
                     <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6', flexShrink: 0, position: 'relative', border: '1px solid var(--border, #e5e7eb)' }}>
@@ -415,7 +372,7 @@ export default function AdminNoticias() {
                     </div>
                   </div>
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="noticia-item-actions">
                     <button onClick={() => toggleDestacadoExistente(n.id, n.destacada)} style={{ background: n.destacada ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary, #f3f4f6)', border: 'none', color: n.destacada ? 'var(--accent, #10b981)' : 'var(--text-muted, #6b7280)', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', transition: 'all 0.2s' }} title={n.destacada ? "Quitar destacado" : "Destacar ahora"}>
                       <Star size={18} fill={n.destacada ? 'var(--accent, #10b981)' : 'transparent'} />
                     </button>
@@ -430,6 +387,52 @@ export default function AdminNoticias() {
         </div>
 
       </div>
+
+      {/* ESTILOS DE MEDIA QUERIES INYECTADOS */}
+      <style>{`
+        /* Configuración base para escritorio */
+        .noticias-dashboard-grid {
+          display: grid;
+          grid-template-columns: 460px 1fr;
+          gap: 40px;
+          align-items: start;
+        }
+
+        /* --- MEDIANAS Y TABLETS (max-width: 1024px) --- */
+        @media (max-width: 1024px) {
+          .noticias-dashboard-grid {
+            grid-template-columns: 1fr; /* Cambia a una sola columna */
+            gap: 48px;
+          }
+        }
+
+        /* --- TELÉFONOS MÓVILES (max-width: 580px) --- */
+        @media (max-width: 580px) {
+          .admin-noticias-container {
+            padding: 24px 16px !important;
+          }
+          form {
+            padding: 20px !important; /* Menos padding en pantallas muy chicas */
+          }
+          .noticia-item-card {
+            flex-direction: column; /* Apila miniatura/texto y botones verticalmente */
+            align-items: stretch !important;
+            gap: 14px !important;
+          }
+          .noticia-item-left {
+            width: 100%;
+          }
+          .noticia-item-actions {
+            justify-content: flex-end;
+            border-top: 1px solid var(--border, #e5e7eb);
+            padding-top: 10px;
+          }
+          .noticia-item-actions button {
+            flex: 1;
+            justify-content: center;
+          }
+        }
+      `}</style>
     </div>
   );
 }

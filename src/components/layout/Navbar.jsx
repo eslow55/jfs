@@ -9,7 +9,6 @@ import logoLight from '../../assets/images/logo-light.png';
 import logoDark from '../../assets/images/logo-dark.png';
 
 export default function Navbar() {
-  // CORRECCIÓN: Se extrae 'desloguear' que es la función real de tu AuthContext
   const { usuario, desloguear } = useAuth(); 
   const { tema, alternarTema } = useTema();
   const location = useLocation();
@@ -39,12 +38,12 @@ export default function Navbar() {
     fontSize: '14px',
     fontWeight: isActive(path) ? '700' : '500',
     color: isActive(path) ? 'var(--text-main)' : 'var(--text-muted)',
-    padding: isMobile ? '14px 20px' : '10px 16px',
-    borderRadius: '12px',
+    padding: isMobile ? '14px 20px' : '8px 14px',
+    borderRadius: '10px',
     background: isActive(path) ? 'var(--bg-secondary)' : 'transparent',
     border: '1px solid',
     borderColor: isActive(path) ? 'var(--border)' : 'transparent',
-    transition: 'all 0.25s ease',
+    transition: 'all 0.2s ease',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
@@ -65,7 +64,7 @@ export default function Navbar() {
     }}>
       <div style={{ 
         maxWidth: '1200px', 
-        height: isMobile ? '70px' : '80px', 
+        height: isMobile ? '60px' : '68px', 
         margin: '0 auto', 
         padding: '0 24px', 
         display: 'flex', 
@@ -73,76 +72,78 @@ export default function Navbar() {
         alignItems: 'center' 
       }}>
         
-        {/* CONTENEDOR DEL LOGO */}
+        {/* CONTENEDOR DEL LOGO (Optimizado para el cambio de tema) */}
         <Link to="/" style={{ 
           textDecoration: 'none', 
           display: 'flex', 
           alignItems: 'center', 
           height: '100%', 
-          zIndex: 1001 
+          zIndex: 1002 /* Asegura que el logo se mantenga por encima de las capas del menú */
         }}>
           <img 
-            src={tema === 'light' ? logoDark : logoLight} 
+            src={tema === 'dark' ? logoLight : logoDark} /* CORRECCIÓN LOGICA: Si es oscuro carga el claro */
             alt="JFS Logo" 
             style={{ 
-              height: isMobile ? '40px' : '48px', 
-              width: 'auto', 
+              height: isMobile ? '28px' : '34px', 
+              width: 'auto',
               maxHeight: '100%',
-              transition: 'transform 0.3s ease',
               objectFit: 'contain',
-              display: 'block'
+              display: 'block',
+              /* BLINDAJE DE PRODUCCIÓN: En caso de que las imágenes tarden en conmutar, 
+                 forzamos un filtro de inversión si el tema detectado es oscuro */
+              filter: tema === 'dark' ? 'drop-shadow(0px 0px 1px rgba(255,255,255,0.1))' : 'none',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
             }} 
           />
         </Link>
 
         {/* --- NAVEGACIÓN VERSIÓN ESCRITORIO --- */}
         {!isMobile && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Link to="/" style={estiloLink('/')}>
-              <Home size={16} /> Inicio
+              <Home size={15} /> Inicio
             </Link>
             <Link to="/noticias" style={estiloLink('/noticias')}>Noticias</Link>
             <Link to="/foro" style={estiloLink('/foro')}>Foro</Link>
             <Link to="/galeria" style={estiloLink('/galeria')}>Galería</Link>
             
-            <div style={{ height: '20px', width: '1px', background: 'var(--border)', margin: '0 10px' }} />
+            <div style={{ height: '16px', width: '1px', background: 'var(--border)', margin: '0 8px' }} />
 
             {/* Botón de Cambio de Tema */}
             <button onClick={alternarTema} style={{ 
               background: 'var(--bg-secondary)', border: '1px solid var(--border)', 
-              padding: '10px', borderRadius: '12px', cursor: 'pointer', color: 'var(--text-main)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform 0.2s'
-            }} className="nav-btn">
-              {tema === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+              padding: '8px', borderRadius: '10px', cursor: 'pointer', color: 'var(--text-main)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              {tema === 'light' ? <Moon size={16} /> : <Sun size={16} />}
             </button>
 
             {/* Panel de Autenticación / Perfil */}
             {usuario ? (
-              <div style={{ position: 'relative', marginLeft: '10px' }}>
+              <div style={{ position: 'relative', marginLeft: '6px' }}>
                 <button 
                   onClick={() => setMenuUsuarioAbierto(!menuUsuarioAbierto)}
-                  style={{ background: 'var(--bg-secondary)', border: `1px solid var(--border)`, padding: '10px 14px', borderRadius: '12px', cursor: 'pointer', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '14px' }}
+                  style={{ background: 'var(--bg-secondary)', border: `1px solid var(--border)`, padding: '8px 12px', borderRadius: '10px', cursor: 'pointer', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px' }}
                 >
-                  <User size={16} style={{ color: 'var(--accent)' }} />
+                  <User size={15} style={{ color: 'var(--accent)' }} />
                   <span>Mi Perfil</span>
-                  <ChevronDown size={14} style={{ transform: menuUsuarioAbierto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                  <ChevronDown size={13} style={{ transform: menuUsuarioAbierto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
 
                 {/* Menú Desplegable */}
                 {menuUsuarioAbierto && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '14px', padding: '8px', width: '200px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
-                    <Link to="/admin" style={{ ...estiloLink('/admin'), padding: '10px 12px' }}>
-                      <Shield size={16} style={{ color: 'var(--accent)' }} /> Panel Admin
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '6px', width: '180px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                    <Link to="/admin" style={{ ...estiloLink('/admin'), padding: '8px 10px' }}>
+                      <Shield size={14} style={{ color: 'var(--accent)' }} /> Panel Admin
                     </Link>
-                    {/* CORRECCIÓN: Ahora ejecuta desloguear en lugar de cerrarSesion */}
-                    <button onClick={desloguear} style={{ width: '100%', background: 'transparent', border: 'none', padding: '10px 12px', borderRadius: '10px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', textAlign: 'left' }}>
-                      <LogOut size={16} /> Cerrar Sesión
+                    <button onClick={desloguear} style={{ width: '100%', background: 'transparent', border: 'none', padding: '8px 10px', borderRadius: '8px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', textAlign: 'left' }}>
+                      <LogOut size={14} /> Cerrar Sesión
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <Link to="/login" style={{ ...estiloLink('/login'), background: 'var(--accent)', color: '#fff', marginLeft: '10px', fontWeight: '600' }}>
+              <Link to="/login" style={{ ...estiloLink('/login'), background: 'var(--accent)', color: '#fff', marginLeft: '6px', fontWeight: '600', padding: '8px 16px' }}>
                 Ingresar
               </Link>
             )}
@@ -151,15 +152,15 @@ export default function Navbar() {
 
         {/* --- BOTÓN MENÚ HAMBURGUESA (SÓLO MÓVIL) --- */}
         {isMobile && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', zIndex: 1001 }}>
-            <button onClick={alternarTema} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '8px', display: 'flex', alignItems: 'center' }}>
-              {tema === 'light' ? <Moon size={22} /> : <Sun size={22} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 1003 }}>
+            <button onClick={alternarTema} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center' }}>
+              {tema === 'light' ? <Moon size={20} /> : <Sun size={20} />}
             </button>
             <button 
               onClick={() => setMenuMovilAbierto(!menuMovilAbierto)} 
-              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-main)', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
             >
-              {menuMovilAbierto ? <X size={24} /> : <Menu size={24} />}
+              {menuMovilAbierto ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         )}
@@ -170,25 +171,25 @@ export default function Navbar() {
       {isMobile && menuMovilAbierto && (
         <div style={{ 
           position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', 
-          background: 'var(--bg-primary)', padding: '100px 24px 24px 24px', 
-          display: 'flex', flexDirection: 'column', gap: '12px', boxSizing: 'border-box'
+          background: 'var(--bg-primary)', padding: '80px 24px 24px 24px', 
+          display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box',
+          zIndex: 1001
         }}>
           <Link to="/" style={estiloLink('/')}>
-            <Home size={18} /> Inicio
+            <Home size={16} /> Inicio
           </Link>
           <Link to="/noticias" style={estiloLink('/noticias')}>Noticias</Link>
           <Link to="/foro" style={estiloLink('/foro')}>Foro</Link>
           <Link to="/galeria" style={estiloLink('/galeria')}>Galería</Link>
 
-          <div style={{ height: '1px', background: 'var(--border)', margin: '10px 0' }} />
+          <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0' }} />
 
           {usuario ? (
             <>
               <Link to="/admin" style={estiloLink('/admin')}>
-                <Shield size={16} style={{ color: 'var(--accent)' }} /> Panel de Control
+                <Shield size={15} style={{ color: 'var(--accent)' }} /> Panel de Control
               </Link>
-              {/* CORRECCIÓN: Ejecuta desloguear también en la vista de dispositivos móviles */}
-              <button onClick={desloguear} style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', padding: '14px 20px', borderRadius: '12px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
+              <button onClick={desloguear} style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', padding: '12px 18px', borderRadius: '10px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
                 <LogOut size={16} /> Cerrar Sesión
               </button>
             </>

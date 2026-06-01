@@ -19,9 +19,12 @@ export default function AdminGaleria() {
   // Sincronización en tiempo real de la galería multimedia
   useEffect(() => {
     const q = query(collection(db, 'galeria'), orderBy('fecha', 'desc'));
-    return onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(q, (snapshot) => {
       setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error en sincronización de galería:", error);
     });
+    return () => unsub();
   }, []);
 
   // Manejador y validador de archivos binarios locales
@@ -29,15 +32,29 @@ export default function AdminGaleria() {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
 
+    // Revocar URL anterior para evitar fugas de memoria
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
     setFile(selectedFile);
     const isVideo = selectedFile.type.startsWith('video/');
     setFileType(isVideo ? 'video' : 'image');
     setPreviewUrl(URL.createObjectURL(selectedFile));
   };
 
+  // Limpieza de estados multimedia
+  const resetFileState = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setPreviewUrl('');
+    setFileType('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   // Petición asíncrona hacia la API de Cloudinary
   const uploadToCloudinary = async () => {
-    if (!file) return '';
+    if (!file) return null;
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
@@ -50,7 +67,12 @@ export default function AdminGaleria() {
 
     if (!res.ok) throw new Error('Error al procesar la subida multimedia.');
     const data = await res.json();
-    return data.secure_url;
+    
+    // Retornamos tanto la URL segura como el ID público para futuras eliminaciones
+    return {
+      url: data.secure_url,
+      publicId: data.public_id
+    };
   };
 
   const handleSubirItem = async (e) => {
@@ -59,19 +81,19 @@ export default function AdminGaleria() {
 
     setCargando(true);
     try {
-      const secureMediaUrl = await uploadToCloudinary();
+      const uploadResult = await uploadToCloudinary();
 
-      // Almacenamiento unificado en Firestore
-      await addDoc(collection(db, 'galeria'), {
-        imagen: secureMediaUrl, 
-        tipo: fileType,
-        fecha: new Date().toISOString()
-      });
+      if (uploadResult) {
+        // Almacenamiento unificado en Firestore incluyendo el publicId de Cloudinary
+        await addDoc(collection(db, 'galeria'), {
+          imagen: uploadResult.url, 
+          publicId: uploadResult.publicId, // Guardado estratégico
+          tipo: fileType,
+          fecha: new Date().toISOString()
+        });
+      }
 
-      // Limpieza de estados
-      setFile(null);
-      setPreviewUrl('');
-      setFileType('');
+      resetFileState();
     } catch (err) {
       alert('Error de red al subir el archivo local. Revisa los presets de Cloudinary.');
       console.error(err);
@@ -80,9 +102,23 @@ export default function AdminGaleria() {
     }
   };
 
-  const handleEliminarItem = async (id) => {
+  const handleEliminarItem = async (id, publicId) => {
     if (window.confirm('¿Deseas remover este recurso de la galería global de forma permanente?')) {
-      await deleteDoc(doc(db, 'galeria', id));
+      try {
+        // 1. Eliminación del documento en Firestore
+        await deleteDoc(doc(db, 'galeria', id));
+        
+        // 2. Nota técnica de infraestructura:
+        // Para borrar de Cloudinary directamente desde el cliente por API Rest sin exponer tus llaves secretas (API Secret),
+        // se requiere un token generado desde backend. Si no dispones de servidor, puedes orquestar el borrado manual 
+        // en tu panel de Cloudinary usando el `publicId` guardado o mediante una Cloud Function de Firebase en producción.
+        if (publicId) {
+          console.log(`Recurso con Public ID: ${publicId} desvinculado de la base de datos.`);
+        }
+      } catch (error) {
+        console.error("Error al eliminar el elemento:", error);
+        alert("Ocurrió un error al intentar eliminar el elemento.");
+      }
     }
   };
 
@@ -98,11 +134,11 @@ export default function AdminGaleria() {
         </p>
       </div>
       
-      {/* FORMULARIO DE CARGA DRAG & DROP */}
+      {/* FORMULARIO DE CARGA */}
       <form onSubmit={handleSubirItem} style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '40px' }}>
         <div style={{ width: '100%' }}>
           {!previewUrl ? (
-            /* Área de Carga Personalizada Avanzada (Dropzone) */
+            /* Área de Carga Dropzone */
             <div 
               onClick={() => fileInputRef.current.click()}
               onMouseEnter={(e) => {
@@ -128,7 +164,6 @@ export default function AdminGaleria() {
                 boxSizing: 'border-box'
               }}
             >
-              {/* Contenedor circular elegante para el ícono */}
               <div style={{
                 background: 'var(--bg-secondary, #ffffff)',
                 padding: '14px',
@@ -150,7 +185,7 @@ export default function AdminGaleria() {
               </p>
             </div>
           ) : (
-            /* Previsualizador de alta fidelidad cuando ya hay archivo */
+            /* Previsualizador cuando hay archivo */
             <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border, #e5e7eb)', background: '#0b0b0e', maxHeight: '360px', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
               {fileType === 'video' ? (
                 <video src={previewUrl} controls style={{ maxHeight: '360px', width: '100%', objectFit: 'contain' }} />
@@ -160,22 +195,13 @@ export default function AdminGaleria() {
               
               <button 
                 type="button"
-                onClick={() => { setFile(null); setPreviewUrl(''); setFileType(''); }}
+                onClick={resetFileState}
                 style={{
-                  position: 'absolute',
-                  top: '14px',
-                  right: '14px',
-                  background: 'rgba(15, 15, 20, 0.85)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '36px',
-                  height: '36px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s, transform 0.1s',
+                  position: 'absolute', top: '14px', right: '14px',
+                  background: 'rgba(15, 15, 20, 0.85)', color: '#ffffff',
+                  border: 'none', borderRadius: '50%', width: '36px', height: '36px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'background 0.2s, transform 0.1s',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = '#ef4444'}
@@ -186,30 +212,19 @@ export default function AdminGaleria() {
             </div>
           )}
           
-          {/* Input oculto controlado por la Ref */}
           <input type="file" ref={fileInputRef} accept="image/*,video/*" onChange={handleFileChange} style={{ display: 'none' }} />
         </div>
 
-        {/* Botón de Envíos Estilizado Completamente */}
         <button 
           type="submit" 
           disabled={cargando || !file} 
           style={{ 
-            alignSelf: 'flex-start', 
-            borderRadius: '12px', 
-            padding: '14px 28px',
+            alignSelf: 'flex-start', borderRadius: '12px', padding: '14px 28px',
             background: (cargando || !file) ? 'var(--text-muted, #9ca3af)' : 'var(--accent, #10b981)',
-            color: '#fff',
-            border: 'none',
-            fontWeight: '700',
-            fontSize: '14.5px',
+            color: '#fff', border: 'none', fontWeight: '700', fontSize: '14.5px',
             cursor: (cargando || !file) ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            transition: 'all 0.2s ease',
-            boxShadow: (cargando || !file) ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)'
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+            transition: 'all 0.2s ease', boxShadow: (cargando || !file) ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.25)'
           }}
         >
           {cargando ? (
@@ -227,7 +242,7 @@ export default function AdminGaleria() {
 
       <hr style={{ border: 'none', borderTop: '1px solid var(--border, #e5e7eb)', margin: '40px 0' }} />
 
-      {/* MÓDULO GRID DE VISUALIZACIÓN MULTIMEDIA */}
+      {/* GRID DE VISUALIZACIÓN MULTIMEDIA */}
       <h4 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '20px', color: 'var(--text-main, #111827)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         Contenido en Exhibición ({items.length})
       </h4>
@@ -237,12 +252,8 @@ export default function AdminGaleria() {
           <div 
             key={img.id} 
             style={{ 
-              position: 'relative', 
-              borderRadius: '14px', 
-              overflow: 'hidden', 
-              height: '140px', 
-              border: '1px solid var(--border, #e5e7eb)',
-              background: '#050505',
+              position: 'relative', borderRadius: '14px', overflow: 'hidden', height: '140px', 
+              border: '1px solid var(--border, #e5e7eb)', background: '#050505',
               boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))'
             }} 
             className="galeria-admin-card"
@@ -258,26 +269,16 @@ export default function AdminGaleria() {
               <img src={img.imagen} alt="Elemento de Galeria" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             )}
 
-            {/* BOTÓN OVERLAY DE ELIMINACIÓN */}
             <button 
-              onClick={() => handleEliminarItem(img.id)}
+              onClick={() => handleEliminarItem(img.id, img.publicId)}
               style={{ 
-                position: 'absolute', 
-                top: '10px', 
-                right: '10px', 
-                background: 'var(--danger, #ef4444)', 
-                color: '#ffffff', 
-                padding: '6px', 
-                borderRadius: '50%', 
-                boxShadow: '0 4px 10px rgba(220, 53, 69, 0.3)',
-                border: 'none',
-                width: '30px',
-                height: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                position: 'absolute', top: '10px', right: '10px', 
+                background: 'var(--danger, #ef4444)', color: '#ffffff', 
+                padding: '6px', borderRadius: '50%', border: 'none',
+                width: '30px', height: '30px', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.2s ease',
+                boxShadow: '0 4px 10px rgba(220, 53, 69, 0.3)'
               }}
               className="trash-overlay-btn"
               title="Remover permanentemente"
@@ -288,7 +289,6 @@ export default function AdminGaleria() {
         ))}
       </div>
 
-      {/* ESTILOS INTERACTIVOS FLUIDOS INYECTADOS */}
       <style>{`
         .galeria-admin-card {
           transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s;

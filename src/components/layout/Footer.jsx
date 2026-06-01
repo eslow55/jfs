@@ -142,8 +142,6 @@ export default function Footer() {
           {/* Status Tracker */}
           <div className="status-node">
             <Activity size={12} className="status-pulse-icon" />
-            <span className="status-text">CORE STATUS:</span>
-            <span className="status-value">ONLINE</span>
             <span className="status-ping-dot" />
           </div>
         </div>
@@ -232,8 +230,6 @@ export default function Footer() {
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'flex-end' }}>
           <div className="spec-badge">
-            <span className="spec-label">ENV</span>
-            <span className="spec-value">PROD_BUILD</span>
           </div>
           <span className="version-tag">
             v2.1.0

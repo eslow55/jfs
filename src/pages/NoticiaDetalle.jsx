@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -28,6 +28,9 @@ export default function NoticiaDetalle() {
   // Estados funcionales avanzados
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [toast, setToast] = useState({ visible: false, mensaje: '', tipo: 'info' });
+  
+  // Referencia para limpiar el temporizador del Toast de forma segura
+  const toastTimerRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -42,7 +45,7 @@ export default function NoticiaDetalle() {
     window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', handleScroll);
     
-    // Verificar si esta noticia ya está guardada en LocalStorage de forma local y real
+    // Verificar si esta noticia ya está guardada en LocalStorage
     const favoritos = JSON.parse(localStorage.getItem('noticias_favoritas') || '[]');
     if (favoritos.includes(id)) {
       setIsBookmarked(true);
@@ -70,16 +73,21 @@ export default function NoticiaDetalle() {
 
     fetchNoticia();
     
+    // Limpieza estricta del ciclo de vida al desmontar
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', handleScroll);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, [id]);
 
-  // --- FUNCIÓN DE TOAST (NOTIFICACIÓN TEMPORAL) ---
+  // --- FUNCIÓN DE TOAST CON LIMPIEZA ANTIFUGAS EN MEMORIA ---
   const mostrarToast = (mensaje, tipo = 'info') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    
     setToast({ visible: true, mensaje, tipo });
-    setTimeout(() => {
+    
+    toastTimerRef.current = setTimeout(() => {
       setToast({ visible: false, mensaje: '', tipo: 'info' });
     }, 3000);
   };
@@ -102,7 +110,6 @@ export default function NoticiaDetalle() {
         }
       }
     } else {
-      // Fallback profesional: Copiar enlace al portapapeles de forma silenciosa
       try {
         await navigator.clipboard.writeText(window.location.href);
         mostrarToast('¡Enlace copiado al portapapeles!', 'success');
@@ -152,7 +159,7 @@ export default function NoticiaDetalle() {
       <div style={{ padding: '120px 24px', textAlign: 'center', color: 'var(--text-main, #111827)', fontFamily: 'system-ui, sans-serif' }}>
         <h2 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '12px', letterSpacing: '-0.5px' }}>Comunicado no disponible</h2>
         <p style={{ color: 'var(--text-muted, #6b7280)', marginBottom: '32px', fontSize: '16px' }}>El artículo fue archivado o la ruta es inválida.</p>
-        <Link to="/noticias" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid #e5e7eb', padding: '12px 24px', borderRadius: '14px', background: 'white' }}>
+        <Link to="/noticias" style={{ color: 'var(--accent, #3b82f6)', textDecoration: 'none', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border, #e5e7eb)', padding: '12px 24px', borderRadius: '14px', background: 'var(--bg-primary, #ffffff)' }}>
           <ArrowLeft size={16} /> Regresar al listado
         </Link>
       </div>
@@ -172,15 +179,32 @@ export default function NoticiaDetalle() {
       {/* BARRA DE PROGRESO DE LECTURA TOP */}
       <div style={{ position: 'fixed', top: 0, left: 0, width: `${scrollProgress}%`, height: '3.5px', background: 'var(--accent, #3b82f6)', zIndex: 9999, transition: 'width 0.1s ease-out' }} />
 
-      {/* TOAST DE AVISOS NOTIFICADOR */}
-      {toast.visible && (
-        <div style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 10000, background: '#1e293b', color: '#ffffff', padding: '14px 24px', borderRadius: '16px', boxShadow: '0 12px 32px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '50%', background: toast.tipo === 'success' ? '#10b981' : '#3b82f6' }}>
-            <Check size={12} color="#fff" strokeWidth={3} />
-          </div>
-          {toast.mensaje}
+      {/* TOAST DE AVISOS NOTIFICADOR INTELIGENTE (Opacidad controlada por estado) */}
+      <div style={{ 
+        position: 'fixed', 
+        bottom: '32px', 
+        right: '32px', 
+        zIndex: 10000, 
+        background: '#1e293b', 
+        color: '#ffffff', 
+        padding: '14px 24px', 
+        borderRadius: '16px', 
+        boxShadow: '0 12px 32px rgba(0,0,0,0.15)', 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '10px', 
+        fontSize: '14px', 
+        fontWeight: '600',
+        pointerEvents: toast.visible ? 'auto' : 'none',
+        opacity: toast.visible ? 1 : 0,
+        transform: toast.visible ? 'translateY(0)' : 'translateY(12px)',
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '50%', background: toast.tipo === 'success' ? '#10b981' : '#3b82f6' }}>
+          <Check size={12} color="#fff" strokeWidth={3} />
         </div>
-      )}
+        {toast.mensaje}
+      </div>
 
       <article style={{ maxWidth: '820px', margin: '0 auto', padding: isMobile ? '32px 16px' : '50px 32px', boxSizing: 'border-box', animation: 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)' }} className="article-container">
         
@@ -223,7 +247,7 @@ export default function NoticiaDetalle() {
           </h1>
 
           {/* METADATOS METICULOSOS */}
-          <div style={{ display: 'flex', gap: '24px', color: 'var(--text-muted, #6b7280)', fontSize: '13.5px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--border, #e5e7eb)', borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '14px', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', gap: '24px', color: 'var(--text-muted, #6b7280)', fontSize: '13.5px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--border, #e5e7eb)', borderBottom: '1px solid var(--border, #e5e7eb)', paddingBottom: '14px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500' }}>
               <Calendar size={14} style={{ color: 'var(--accent, #3b82f6)' }} /> {formatearFecha(fechaPublicacion)}
             </span>
@@ -295,10 +319,6 @@ export default function NoticiaDetalle() {
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(30px); }
-          to { opacity: 1; transform: translateX(0); }
         }
         .hover-back-link { transition: color 0.2s ease; }
         .hover-back-link:hover { color: var(--text-main, #111827) !important; }

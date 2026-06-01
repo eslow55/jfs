@@ -15,7 +15,7 @@ const SkeletonLoader = () => (
       <div 
         key={i} 
         style={{ 
-          height: '380px', 
+          height: '390px', 
           background: 'var(--bg-secondary)', 
           borderRadius: '24px', 
           border: '1px solid var(--border)', 
@@ -94,7 +94,8 @@ export default function Noticias() {
 
     let nuevosFavs = [...favoritos];
     if (nuevosFavs.includes(id)) {
-      nuevsFavs = nuevosFavs.filter(favId => favId !== id);
+      // FIX: Se corrigió el typo de "nuevsFavs" a "nuevosFavs"
+      nuevosFavs = nuevosFavs.filter(favId => favId !== id);
     } else {
       nuevosFavs.push(id);
     }
@@ -137,11 +138,11 @@ export default function Noticias() {
       {/* --- CABECERA Y CAJA DE BÚSQUEDA --- */}
       <div style={{ marginBottom: '36px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
         <div style={{ textAlign: isMobile ? 'center' : 'left' }}>
-          <span style={{ background: 'rgba(59, 130, 246, 0.08)', color: 'var(--accent)', padding: '6px 14px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          <span style={{ background: 'rgba(59, 130, 246, 0.08)', color: 'var(--accent, #3b82f6)', padding: '6px 14px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>
             Prensa & Comunicados
           </span>
           <h1 style={{ fontSize: isMobile ? '34px' : '44px', fontWeight: '800', letterSpacing: '-1.2px', margin: '12px 0 8px 0', color: 'var(--text-main)', lineHeight: '1.1' }}>
-            Crónicas & <span style={{ color: 'var(--accent)' }}>Anuncios</span>
+            Crónicas & <span style={{ color: 'var(--accent, #3b82f6)' }}>Anuncios</span>
           </h1>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: isMobile ? '14.5px' : '16.5px', fontWeight: '400' }}>
             Canal oficial de actualizaciones, boletines y novedades de la comunidad.
@@ -160,7 +161,7 @@ export default function Noticias() {
               style={{ 
                 width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', 
                 padding: '16px 16px 16px 52px', borderRadius: '18px', color: 'var(--text-main)', 
-                outline: 'none', fontSize: '14.5px', transition: 'all 0.25s', boxSizing: 'border-box',
+                outline: 'none', fontSize: '14.5px', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)', boxSizing: 'border-box',
                 boxShadow: 'var(--shadow)'
               }}
               className="search-input"
@@ -176,7 +177,7 @@ export default function Noticias() {
           style={{
             background: filtroActivo === 'todas' ? 'var(--text-main, #111827)' : 'transparent',
             color: filtroActivo === 'todas' ? 'var(--bg-primary, #ffffff)' : 'var(--text-muted, #6b7280)',
-            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s ease'
           }}
         >
           <Layers size={15} /> Todos los artículos
@@ -187,7 +188,7 @@ export default function Noticias() {
           style={{
             background: filtroActivo === 'guardadas' ? 'var(--accent, #3b82f6)' : 'transparent',
             color: filtroActivo === 'guardadas' ? '#ffffff' : 'var(--text-muted, #6b7280)',
-            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+            border: 'none', padding: '8px 18px', borderRadius: '12px', fontSize: '13.5px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s ease'
           }}
           className={filtroActivo !== 'guardadas' ? 'bookmark-tab-trigger' : ''}
         >
@@ -202,7 +203,7 @@ export default function Noticias() {
       ) : (
         noticiasFiltradas.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 20px', border: '1px dashed var(--border)', borderRadius: '24px', background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-            <ShieldAlert size={40} style={{ marginBottom: '14px', opacity: 0.6, color: 'var(--accent)' }} />
+            <ShieldAlert size={40} style={{ marginBottom: '14px', opacity: 0.6, color: 'var(--accent, #3b82f6)' }} />
             <p style={{ margin: 0, fontSize: '15px', fontWeight: '500' }}>
               {filtroActivo === 'guardadas' 
                 ? 'No tienes lecturas pendientes en tus marcadores.' 
@@ -225,8 +226,9 @@ export default function Noticias() {
                   to={`/noticias/${noticia.id}`}
                   style={{ 
                     background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '24px', 
-                    overflow: 'hidden', textDecoration: 'none', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    position: 'relative', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)'
+                    overflow: 'hidden', textDecoration: 'none', transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    position: 'relative', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)',
+                    willChange: 'transform, border-color'
                   }}
                   className="news-card"
                 >
@@ -236,11 +238,11 @@ export default function Noticias() {
                     onClick={(e) => toggleBookmark(e, noticia.id)}
                     style={{
                       position: 'absolute', top: '14px', right: '14px', zIndex: 12,
-                      background: 'rgba(255, 255, 255, 0.82)', backdropFilter: 'blur(8px)',
-                      WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(0,0,0,0.05)',
+                      background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(0,0,0,0.06)',
                       color: marcadoComoFav ? 'var(--accent, #3b82f6)' : '#111827',
                       padding: '8px', borderRadius: '10px', cursor: 'pointer', display: 'flex',
-                      alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease'
+                      alignItems: 'center', justifyContent: 'center', transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                     className="card-bookmark-trigger"
                     title={marcadoComoFav ? "Quitar de marcadores" : "Guardar para después"}
@@ -250,25 +252,25 @@ export default function Noticias() {
 
                   {/* IMAGEN DE PORTADA */}
                   {noticia.fotoDefinitiva ? (
-                    <div style={{ height: '190px', width: '100%', overflow: 'hidden', borderBottom: '1px solid var(--border)', background: '#0a0a0c' }}>
+                    <div style={{ height: '190px', width: '100%', overflow: 'hidden', borderBottom: '1px solid var(--border)', background: '#0a0a0c', position: 'relative' }}>
                       <img 
                         src={noticia.fotoDefinitiva} 
                         alt={noticia.titulo || "Imagen de noticia"} 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.4s ease' }} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)' }} 
                         className="card-image"
                         loading="lazy"
                       />
                     </div>
                   ) : (
                     <div style={{ height: '190px', width: '100%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', justifyContent: 'center' }}>
-                      <ImageIcon size={32} style={{ opacity: 0.25, color: 'var(--accent)' }} />
+                      <ImageIcon size={32} style={{ opacity: 0.25, color: 'var(--accent, #3b82f6)' }} />
                     </div>
                   )}
                   
                   {/* CUERPO TEXTUAL */}
                   <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                      <Calendar size={13} style={{ color: 'var(--accent)' }} /> {formatearFecha(noticia.fecha || noticia.createdAt)}
+                      <Calendar size={13} style={{ color: 'var(--accent, #3b82f6)' }} /> {formatearFecha(noticia.fecha || noticia.createdAt)}
                     </div>
                     
                     <h3 style={{ fontSize: '19px', fontWeight: '800', margin: '0 0 10px 0', color: 'var(--text-main)', lineHeight: '1.4', letterSpacing: '-0.3px' }}>
@@ -283,8 +285,8 @@ export default function Noticias() {
                     </p>
                     
                     <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--accent)', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }} className="read-more-btn">
-                        Leer boletín completo <ArrowUpRight size={14} style={{ transition: 'transform 0.2s' }} className="arrow-icon" />
+                      <span style={{ color: 'var(--accent, #3b82f6)', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }} className="read-more-btn">
+                        Leer boletín completo <ArrowUpRight size={14} style={{ transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }} className="arrow-icon" />
                       </span>
                     </div>
                   </div>
@@ -295,21 +297,21 @@ export default function Noticias() {
         )
       )}
 
-      {/* --- INYECCIÓN DE ESTILOS DE INTERACCIÓN --- */}
+      {/* --- INYECCIÓN DE ESTILOS DE INTERACCIÓN PULIDOS --- */}
       <style>{`
         .news-card:hover { 
           transform: translateY(-6px); 
-          border-color: var(--accent); 
-          box-shadow: 0 22px 40px rgba(0, 0, 0, 0.15); 
+          border-color: var(--accent, #3b82f6); 
+          box-shadow: 0 22px 40px rgba(0, 0, 0, 0.08); 
         }
         .news-card:hover .card-image {
-          transform: scale(1.03);
+          transform: scale(1.04);
         }
         .news-card:hover .arrow-icon {
-          transform: translate(2px, -2px);
+          transform: translate(3px, -3px);
         }
         .search-input:focus {
-          border-color: var(--accent) !important;
+          border-color: var(--accent, #3b82f6) !important;
           box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12) !important;
         }
         .bookmark-tab-trigger:hover {
@@ -317,8 +319,10 @@ export default function Noticias() {
           color: var(--text-main) !important;
         }
         .card-bookmark-trigger:hover {
-          transform: scale(1.06);
+          transform: scale(1.08);
           background: #ffffff !important;
+          color: #000000 !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
       `}</style>
     </div>

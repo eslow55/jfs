@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Heart, Trash2, Send, Image as ImageIcon, 
-  Loader2, MessageSquare, X, MessageCircle, AlertCircle 
+  Loader2, MessageSquare, X, MessageCircle 
 } from 'lucide-react';
 import { useTema } from "../contexts/TemaContext";
 
@@ -19,6 +19,7 @@ const SeccionComentarios = ({ publicacionId, myUserId }) => {
   const [comentarios, setComentarios] = useState([]);
   const [input, setInput] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [hoverEliminar, setHoverEliminar] = useState({});
 
   useEffect(() => {
     const q = query(
@@ -71,7 +72,9 @@ const SeccionComentarios = ({ publicacionId, myUserId }) => {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              gap: '12px'
+              gap: '12px',
+              position: 'relative',
+              zIndex: 10
             }}
           >
             <div style={{ flex: 1 }}>
@@ -86,7 +89,18 @@ const SeccionComentarios = ({ publicacionId, myUserId }) => {
             {comentario.creatorId === myUserId && (
               <button 
                 onClick={() => handleEliminarComentario(comentario.id)}
-                style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px', display: 'flex', opacity: 0.7 }}
+                onMouseEnter={() => setHoverEliminar(prev => ({ ...prev, [comentario.id]: true }))}
+                onMouseLeave={() => setHoverEliminar(prev => ({ ...prev, [comentario.id]: false }))}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: 'var(--danger)', 
+                  cursor: 'pointer', 
+                  padding: '2px', 
+                  display: 'flex', 
+                  opacity: hoverEliminar[comentario.id] ? 1 : 0.7,
+                  transition: 'opacity 0.2s'
+                }}
               >
                 <Trash2 size={14} />
               </button>
@@ -96,7 +110,7 @@ const SeccionComentarios = ({ publicacionId, myUserId }) => {
       </div>
 
       {/* Formulario de entrada */}
-      <form onSubmit={handleEnviarComentario} style={{ display: 'flex', gap: '8px' }}>
+      <form onSubmit={handleEnviarComentario} style={{ display: 'flex', gap: '8px', position: 'relative', zIndex: 10 }}>
         <input 
           value={input} 
           onChange={(e) => setInput(e.target.value)} 
@@ -113,10 +127,16 @@ const SeccionComentarios = ({ publicacionId, myUserId }) => {
           style={{ 
             background: 'var(--accent)', border: 'none', color: '#fff', 
             borderRadius: '10px', padding: '0 16px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: (!input.trim() || enviando) ? 0.5 : 1,
+            transition: 'opacity 0.2s'
           }}
         >
-          {enviando ? <Loader2 size={15} className="spinner" /> : <Send size={15} />}
+          {enviando ? (
+            <Loader2 size={15} className="spinner" />
+          ) : (
+            <Send size={15} />
+          )}
         </button>
       </form>
     </div>
@@ -135,7 +155,13 @@ export default function Foro() {
   const [cargandoEnvio, setCargandoEnvio] = useState(false);
   const [hilosAbiertos, setHilosAbiertos] = useState({});
 
-  // Generación y persistencia de ID único de usuario anónimo/comunitario
+  // Estados de control para hovers dinámicos inline
+  const [hoverImagen, setHoverImagen] = useState(false);
+  const [hoverEliminarPost, setHoverEliminarPost] = useState({});
+  const [hoverReaccion, setHoverReaccion] = useState({});
+  const [hoverRespuestas, setHoverRespuestas] = useState({});
+
+  // Generación y persistencia de ID único de usuario
   const myUserId = useMemo(() => {
     let id = localStorage.getItem('forum_user_id');
     if (!id) { 
@@ -145,14 +171,13 @@ export default function Foro() {
     return id;
   }, []);
 
-  // Escucha activa de publicaciones en tiempo real
+  // Escucha activa en tiempo real de Firestore
   useEffect(() => {
     const q = query(collection(db, 'foro'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const listaDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPublicaciones(listaDocs);
       
-      // Consultar y reconstruir el estado de mis reacciones persistidas en la subcolección de Firebase
       const mapaReacciones = {};
       for (let post of listaDocs) {
         const queryReaccion = await getDocs(collection(db, 'foro', post.id, 'likes'));
@@ -232,9 +257,48 @@ export default function Foro() {
     setHilosAbiertos(prev => ({ ...prev, [pubId]: !prev[pubId] }));
   };
 
+  // --- ESTRUCTURA DE ESTILOS INLINE NATIVOS ---
+  const contenedorPrincipalEstilos = {
+    minHeight: '100vh',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-main)',
+    padding: '40px 16px',
+    boxSizing: 'border-box',
+    position: 'relative',
+    overflowX: 'hidden'
+  };
+
+  // CAPA DE LOGOS DE FONDO (Igual a la del Login)
+  const capaLogosFondoEstilos = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundImage: "url('/logo-pattern.png')",
+    backgroundRepeat: 'repeat',
+    backgroundSize: '180px',
+    opacity: 0.03,
+    pointerEvents: 'none',
+    zIndex: 1
+  };
+
+  const tarjetaEstilos = {
+    background: 'var(--bg-secondary)',
+    padding: '20px',
+    borderRadius: '20px',
+    border: '1px solid var(--border)',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.01)',
+    position: 'relative',
+    zIndex: 10
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-main)', padding: '40px 16px', boxSizing: 'border-box' }}>
-      <div style={{ maxWidth: '620px', margin: '0 auto' }}>
+    <div style={contenedorPrincipalEstilos}>
+      {/* Capa inferior con el patrón repetitivo de logos */}
+      <div style={capaLogosFondoEstilos} />
+
+      <div style={{ maxWidth: '620px', margin: '0 auto', position: 'relative', zIndex: 10 }}>
         
         {/* --- ENCABEZADO --- */}
         <header style={{ marginBottom: '32px', textAlign: 'center' }}>
@@ -247,10 +311,7 @@ export default function Foro() {
         </header>
 
         {/* --- EDITOR DE PUBLICACIONES --- */}
-        <div style={{ 
-          background: 'var(--bg-secondary)', padding: '20px', borderRadius: '20px', 
-          border: '1px solid var(--border)', marginBottom: '32px', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' 
-        }}>
+        <div style={{ ...tarjetaEstilos, marginBottom: '32px', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
           <textarea 
             value={texto} 
             onChange={(e) => setTexto(e.target.value)}
@@ -275,7 +336,19 @@ export default function Foro() {
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-            <label style={{ cursor: 'pointer', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px' }} className="tool-btn">
+            <label 
+              onMouseEnter={() => setHoverImagen(true)}
+              onMouseLeave={() => setHoverImagen(false)}
+              style={{ 
+                cursor: 'pointer', 
+                color: hoverImagen ? 'var(--text-main)' : 'var(--text-muted)', 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                fontSize: '14px',
+                transition: 'color 0.2s'
+              }}
+            >
               <ImageIcon size={18} />
               <span style={{ fontSize: '13px', fontWeight: '500' }}>Añadir imagen</span>
               <input type="file" accept="image/*" onChange={(e) => setArchivo(e.target.files[0])} style={{ display: 'none' }} />
@@ -287,9 +360,10 @@ export default function Foro() {
               style={{ 
                 padding: '10px 22px', background: 'var(--accent)', border: 'none', 
                 color: '#fff', borderRadius: '12px', cursor: 'pointer', fontWeight: '600', 
-                fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', transition: 'opacity 0.2s' 
+                fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', 
+                transition: 'opacity 0.2s',
+                opacity: (cargandoEnvio || (!texto.trim() && !archivo)) ? 0.5 : 1
               }}
-              className="publish-btn"
             >
               {cargandoEnvio ? <Loader2 size={16} className="spinner" /> : 'Publicar Hilo'}
             </button>
@@ -312,13 +386,7 @@ export default function Foro() {
             {publicaciones.map(chisme => {
               const tieneMiLike = misReacciones[chisme.id];
               return (
-                <div 
-                  key={chisme.id} 
-                  style={{ 
-                    background: 'var(--bg-secondary)', padding: '20px', borderRadius: '20px', 
-                    border: '1px solid var(--border)', boxShadow: '0 4px 16px rgba(0,0,0,0.01)' 
-                  }}
-                >
+                <div key={chisme.id} style={tarjetaEstilos}>
                   <p style={{ margin: '0 0 14px 0', lineHeight: '1.6', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
                     {chisme.contenido}
                   </p>
@@ -334,11 +402,15 @@ export default function Foro() {
                       
                       {/* BOTÓN REACCIÓN (VOTAR) */}
                       <button 
-                        onClick={() => handleVotarPublicacion(chisme.id)} 
+                        onClick={() => handleVotarPublicacion(chisme.id)}
+                        onMouseEnter={() => setHoverReaccion(prev => ({ ...prev, [chisme.id]: true }))}
+                        onMouseLeave={() => setHoverReaccion(prev => ({ ...prev, [chisme.id]: false }))}
                         style={{ 
                           background: 'none', border: 'none', display: 'flex', alignItems: 'center', 
-                          gap: '6px', color: tieneMiLike ? 'var(--danger)' : 'var(--text-muted)', 
-                          cursor: 'pointer', padding: '6px 0', fontSize: '14px', fontWeight: '500' 
+                          gap: '6px', 
+                          color: tieneMiLike ? 'var(--danger)' : (hoverReaccion[chisme.id] ? 'var(--danger)' : 'var(--text-muted)'), 
+                          cursor: 'pointer', padding: '6px 0', fontSize: '14px', fontWeight: '500',
+                          transition: 'color 0.2s'
                         }}
                       >
                         <Heart size={17} fill={tieneMiLike ? 'var(--danger)' : 'none'} style={{ transition: 'transform 0.2s' }} /> 
@@ -348,10 +420,14 @@ export default function Foro() {
                       {/* BOTÓN DESPLEGAR RESPUESTAS */}
                       <button 
                         onClick={() => toggleHiloComentarios(chisme.id)}
+                        onMouseEnter={() => setHoverRespuestas(prev => ({ ...prev, [chisme.id]: true }))}
+                        onMouseLeave={() => setHoverRespuestas(prev => ({ ...prev, [chisme.id]: false }))}
                         style={{ 
                           background: 'none', border: 'none', display: 'flex', alignItems: 'center', 
-                          gap: '6px', color: hilosAbiertos[chisme.id] ? 'var(--accent)' : 'var(--text-muted)', 
-                          cursor: 'pointer', padding: '6px 0', fontSize: '14px', fontWeight: '500' 
+                          gap: '6px', 
+                          color: hilosAbiertos[chisme.id] ? 'var(--accent)' : (hoverRespuestas[chisme.id] ? 'var(--text-main)' : 'var(--text-muted)'), 
+                          cursor: 'pointer', padding: '6px 0', fontSize: '14px', fontWeight: '500',
+                          transition: 'color 0.2s'
                         }}
                       >
                         <MessageSquare size={17} />
@@ -362,9 +438,18 @@ export default function Foro() {
                     {/* ACCIÓN DE ELIMINACIÓN PROPIA */}
                     {chisme.creatorId === myUserId && (
                       <button 
-                        onClick={() => handleEliminarPublicacion(chisme.id)} 
-                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', display: 'flex' }}
-                        className="delete-thread-btn"
+                        onClick={() => handleEliminarPublicacion(chisme.id)}
+                        onMouseEnter={() => setHoverEliminarPost(prev => ({ ...prev, [chisme.id]: true }))}
+                        onMouseLeave={() => setHoverEliminarPost(prev => ({ ...prev, [chisme.id]: false }))}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          color: hoverEliminarPost[chisme.id] ? 'var(--danger)' : 'var(--text-muted)', 
+                          cursor: 'pointer', 
+                          padding: '6px', 
+                          display: 'flex',
+                          transition: 'color 0.2s'
+                        }}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -382,7 +467,7 @@ export default function Foro() {
         )}
       </div>
 
-      {/* --- REGLAS DE ANIMACIÓN Y COMPORTAMIENTO --- */}
+      {/* --- REGLAS DE ANIMACIÓN NATIVAS --- */}
       <style>{`
         .spinner {
           animation: forum-spin 1s linear infinite;
@@ -390,16 +475,6 @@ export default function Foro() {
         @keyframes forum-spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
-        }
-        .tool-btn:hover {
-          color: var(--text-main) !important;
-        }
-        .publish-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .delete-thread-btn:hover {
-          color: var(--danger) !important;
         }
       `}</style>
     </div>

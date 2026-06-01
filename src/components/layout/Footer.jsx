@@ -4,20 +4,43 @@ import {
   Shield, 
   Newspaper, 
   MessageSquare, 
-  Image, 
+  Image as ImageIcon, 
   Info, 
   LogIn,
   Activity,
   ArrowUpRight
 } from 'lucide-react';
 
+// Importación corregida de los logos desde los assets relativos
+import logoDark from '../../assets/images/logo-dark.png';
+import logoLight from '../../assets/images/logo-light.png';
+
 export default function Footer() {
   const [anchoVentana, setAnchoVentana] = useState(window.innerWidth);
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
     const handleResize = () => setAnchoVentana(window.innerWidth);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    
+    // Escucha de cambios de tema en caliente
+    const verificarTema = () => {
+      const esOscuro = document.documentElement.classList.contains('dark') || 
+                       document.body.classList.contains('dark') ||
+                       document.documentElement.getAttribute('data-theme') === 'dark';
+      setIsDarkMode(esOscuro);
+    };
+
+    verificarTema();
+
+    const observer = new MutationObserver(verificarTema);
+    observer.observe(document.documentElement, { attributes: true });
+    observer.observe(document.body, { attributes: true });
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
   }, []);
 
   const isMobile = anchoVentana < 600;
@@ -31,15 +54,37 @@ export default function Footer() {
 
   return (
     <footer style={{ 
-      background: 'var(--nav-bg-blur, rgba(var(--bg-secondary-rgb, 20, 20, 25), 0.95))', 
+      background: 'var(--bg-secondary)', 
       borderTop: '1px solid var(--border)',
       padding: isMobile ? '48px 24px 32px 24px' : isTablet ? '64px 40px 40px 40px' : '80px 40px 40px 40px',
       marginTop: 'auto',
       width: '100%',
       boxSizing: 'border-box',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      transition: 'background 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease'
     }}>
+      
+      {/* CAPA DE PATRÓN DE LOGOS PERFECCIONADA (Con máscara kinética y opacidad milimétrica) */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: `url(${isDarkMode ? logoDark : logoLight})`,
+        backgroundRepeat: 'repeat',
+        backgroundSize: '150px',
+        // Opacidad ultra-sutil para que sea un detalle elegante y no compita con el texto
+        opacity: isDarkMode ? 0.012 : 0.018, 
+        pointerEvents: 'none',
+        zIndex: 1,
+        animation: 'bg-kinetic-slide 35s linear infinite',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%)',
+        maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%)',
+        transition: 'background-image 0.3s ease, opacity 0.3s ease'
+      }} />
+
       {/* Línea de Neón Decorativa Superior */}
       <div style={{
         position: 'absolute',
@@ -48,7 +93,8 @@ export default function Footer() {
         right: 0,
         height: '1px',
         background: 'linear-gradient(90deg, transparent, var(--accent, #00cc88), #00a3ff, transparent)',
-        opacity: 0.4
+        opacity: 0.35,
+        zIndex: 2
       }} />
 
       {/* Contenedor Principal con Grilla */}
@@ -59,10 +105,10 @@ export default function Footer() {
         gridTemplateColumns: obtenerColumnasGrilla(), 
         gap: isMobile ? '40px' : isTablet ? '48px' : '64px',
         position: 'relative',
-        zIndex: 2
+        zIndex: 10
       }}>
         
-        {/* Columna 1: Identidad Corporativa / Core Node */}
+        {/* Columna 1: Identidad Corporativa */}
         <div style={{ 
           display: 'flex', 
           flexDirection: 'column', 
@@ -93,7 +139,7 @@ export default function Footer() {
             Plataforma centralizada hiper-reactiva. Interconexión directa de módulos informativos, hilos de discusión y arquitecturas administrativas de alta fidelidad.
           </p>
           
-          {/* Status Tracker Futurista */}
+          {/* Status Tracker */}
           <div className="status-node">
             <Activity size={12} className="status-pulse-icon" />
             <span className="status-text">CORE STATUS:</span>
@@ -123,7 +169,7 @@ export default function Footer() {
             </li>
             <li>
               <Link to="/galeria" className="cyber-footer-link">
-                <span className="link-bullet">/</span> <Image size={13} className="f-icon" /> Galería
+                <span className="link-bullet">/</span> <ImageIcon size={13} className="f-icon" /> Galería
               </Link>
             </li>
           </ul>
@@ -146,7 +192,6 @@ export default function Footer() {
           <h3 className="footer-section-title">Sistemas de Control</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <Link to="/admin" className="cyber-admin-card">
-              <div className="card-glitch-layer" />
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative', zIndex: 2 }}>
                 <Shield size={15} style={{ color: 'var(--accent)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -179,7 +224,7 @@ export default function Footer() {
         gap: '20px',
         alignItems: isMobile ? 'flex-start' : 'center',
         position: 'relative',
-        zIndex: 2
+        zIndex: 10
       }}>
         <div style={{ fontWeight: '500', opacity: 0.8 }}>
           <span>© {new Date().getFullYear()} JFS — Todos los derechos reservados de manera digital.</span>
@@ -196,8 +241,14 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* INYECCIÓN DE ESTILOS AVANZADOS CYBERPUNK */}
+      {/* INYECCIÓN DE ESTILOS PERFECCIONADOS */}
       <style>{`
+        /* --- ANIMACIÓN DINÁMICA DE FONDO --- */
+        @keyframes bg-kinetic-slide {
+          0% { background-position: 0px 0px; }
+          100% { background-position: 150px 300px; }
+        }
+
         /* --- TÍTULOS DE SECCIÓN --- */
         .footer-section-title {
           font-size: 11px;
@@ -219,7 +270,7 @@ export default function Footer() {
           background: var(--accent, #00cc88);
         }
 
-        /* --- LISTAS Y ENLACES KINETICOS --- */
+        /* --- ENLACES INTERACTIVOS DE NAVEGACIÓN --- */
         .footer-links-list {
           list-style: none;
           padding: 0;
@@ -236,7 +287,7 @@ export default function Footer() {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           padding: 3px 0;
           width: fit-content;
         }
@@ -244,7 +295,7 @@ export default function Footer() {
           color: var(--accent);
           opacity: 0;
           transform: translateX(-4px);
-          transition: all 0.25s ease;
+          transition: all 0.2s ease;
           font-family: monospace;
           font-weight: 800;
         }
@@ -253,11 +304,10 @@ export default function Footer() {
           transition: transform 0.2s ease;
         }
 
-        /* Hover dinámico para dispositivos no táctiles */
         @media (min-width: 900px) {
           .cyber-footer-link:hover {
             color: var(--text-main) !important;
-            padding-left: 6px;
+            padding-left: 4px;
           }
           .cyber-footer-link:hover .link-bullet {
             opacity: 1;
@@ -265,12 +315,12 @@ export default function Footer() {
           }
           .cyber-footer-link:hover .f-icon {
             opacity: 1;
-            transform: scale(1.15);
+            transform: scale(1.1);
             color: var(--text-main);
           }
         }
 
-        /* --- PANEL INTERACTIVO DE CONTROL --- */
+        /* --- TARJETA DEL PANEL DE CONTROL --- */
         .cyber-admin-card {
           background: var(--bg-primary);
           border: 1px solid var(--border);
@@ -282,7 +332,9 @@ export default function Footer() {
           justify-content: space-between;
           position: relative;
           overflow: hidden;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
         }
         .cyber-admin-card .card-title {
           font-size: 13px;
@@ -298,12 +350,12 @@ export default function Footer() {
         }
         .cyber-admin-card .card-arrow {
           color: var(--text-muted);
-          transition: all 0.3s ease;
+          transition: all 0.25s ease;
         }
         .cyber-admin-card:hover {
           border-color: rgba(0, 204, 136, 0.4);
-          box-shadow: 0 8px 24px -8px rgba(0, 204, 136, 0.15);
-          transform: translateY(-2px);
+          box-shadow: 0 6px 20px -8px rgba(0, 204, 136, 0.15);
+          transform: translateY(-1px);
         }
         .cyber-admin-card:hover .card-title {
           color: var(--accent);
@@ -330,7 +382,7 @@ export default function Footer() {
           color: var(--text-main);
         }
 
-        /* --- BADGES / MONOSPACE METRICS --- */
+        /* --- CONTENEDORES MONOSPACE (BADGES) --- */
         .status-node {
           display: inline-flex;
           align-items: center;
@@ -342,6 +394,8 @@ export default function Footer() {
           gap: 6px;
           font-family: monospace;
           font-size: 11px;
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
         }
         .status-pulse-icon {
           color: var(--accent);
@@ -397,7 +451,6 @@ export default function Footer() {
           font-weight: 800;
         }
 
-        /* --- KEYFRAMES --- */
         @keyframes statusBlink {
           0%, 100% { opacity: 0.4; transform: scale(0.9); }
           50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 12px var(--accent); }

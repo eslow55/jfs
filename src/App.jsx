@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // --- IMPORTACIÓN DE CONTEXTOS ---
@@ -12,11 +12,24 @@ import Footer from './components/layout/Footer';
 // --- IMPORTACIÓN DE PÁGINAS ---
 import Home from './pages/Home';
 import Noticias from './pages/Noticias';
-import NoticiaDetalle from './pages/NoticiaDetalle'; // <-- NUEVA IMPORTACIÓN DE NIVEL EDITORIAL
+import NoticiaDetalle from './pages/NoticiaDetalle'; 
 import Foro from './pages/Foro'; 
 import Galeria from './pages/Galeria';
+import SobreNosotros from './pages/SobreNosotros'; // <-- INTEGRADA: Vista Institucional del Footer
 import Login from './pages/Login';
 import Admin from './components/admin/Admin';
+
+// --- COMPONENTE DE OPTIMIZACIÓN UX: RESET DE SCROLL ---
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    // Sube la pantalla al inicio instantáneamente al cambiar de página
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 // --- PROTECCIÓN DE RUTAS ADMINISTRATIVAS ---
 function RutaProtegida({ children }) {
@@ -104,17 +117,24 @@ export default function App() {
     <TemaProvider>
       <AuthProvider>
         <Router>
+          {/* Inicializador del reset de scroll */}
+          <ScrollToTop />
+          
           <LayoutEstructurado>
             <Routes>
               {/* Rutas Públicas Estándar */}
               <Route path="/" element={<Home />} />
               <Route path="/noticias" element={<Noticias />} />
               
-              {/* Nueva Ruta Dinámica para la Lectura de Crónicas Individuales */}
+              {/* Ruta Dinámica para la Lectura de Crónicas Individuales */}
               <Route path="/noticias/:id" element={<NoticiaDetalle />} />
               
-              <Route path="/foro" element={<Foro />} />
+              <Route path="/foro" element={<Forum />} />
               <Route path="/galeria" element={<Galeria />} />
+              
+              {/* Nueva Ruta Institucional vinculada al Footer */}
+              <Route path="/SobreNosotros" element={<SobreNosotros />} />
+              
               <Route path="/login" element={<Login />} />
               
               {/* Panel de administración protegido */}

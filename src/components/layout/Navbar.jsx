@@ -72,26 +72,24 @@ export default function Navbar() {
         alignItems: 'center' 
       }}>
         
-        {/* CONTENEDOR DEL LOGO (Optimizado para el cambio de tema) */}
+        {/* CONTENEDOR DEL LOGO (Optimizado en tamaño y visibilidad) */}
         <Link to="/" style={{ 
           textDecoration: 'none', 
           display: 'flex', 
           alignItems: 'center', 
           height: '100%', 
-          zIndex: 1002 /* Asegura que el logo se mantenga por encima de las capas del menú */
+          zIndex: 1002 
         }}>
           <img 
-            src={tema === 'dark' ? logoLight : logoDark} /* CORRECCIÓN LOGICA: Si es oscuro carga el claro */
+            src={tema === 'dark' ? logoLight : logoDark} 
             alt="JFS Logo" 
             style={{ 
-              height: isMobile ? '28px' : '34px', 
+              /* AJUSTE PRECISIÓN: Tamaño estilizado para que no se vea gigante */
+              height: isMobile ? '24px' : '26px', 
               width: 'auto',
               maxHeight: '100%',
               objectFit: 'contain',
               display: 'block',
-              /* BLINDAJE DE PRODUCCIÓN: En caso de que las imágenes tarden en conmutar, 
-                 forzamos un filtro de inversión si el tema detectado es oscuro */
-              filter: tema === 'dark' ? 'drop-shadow(0px 0px 1px rgba(255,255,255,0.1))' : 'none',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
             }} 
           />

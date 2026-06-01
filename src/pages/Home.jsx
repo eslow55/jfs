@@ -48,7 +48,7 @@ export default function Home() {
 
   // Sincronización en Tiempo Real con Firebase
   useEffect(() => {
-    // TIP: Subimos el límite a 12 o 15 para asegurar que si hay noticias viejas fijadas, entren en el snapshot
+    // Subimos el límite para asegurar la captura de las noticias fijadas
     const qNoticias = query(collection(db, 'noticias'), orderBy('fecha', 'desc'), limit(15));
     
     const unsubNoticias = onSnapshot(qNoticias, (snapshot) => {
@@ -92,28 +92,31 @@ export default function Home() {
   }, []);
 
   // ==========================================================================
-  // LÓGICA DE ORDENAMIENTO CORREGIDA PARA ARTÍCULOS FIJADOS
+  // LÓGICA DE ORDENAMIENTO CORREGIDA (PROPIEDAD DIRECTA: destacada)
   // ==========================================================================
   const noticiasOrdenadas = useMemo(() => {
     return [...noticias].sort((a, b) => {
-      // 1. Prioridad Máxima: Si uno está fijado y el otro no
-      const aFijado = a.fijado === true || a.isPinned === true;
-      const bFijado = b.fijado === true || b.isPinned === true;
+      // Mapeo del campo exacto que viene desde el Panel de Administración
+      const aDestacada = a.destacada === true;
+      const bDestacada = b.destacada === true;
       
-      if (aFijado && !bFijado) return -1;
-      if (!aFijado && bFijado) return 1;
+      // 1. Prioridad Máxima: Si una está destacada y la otra no, va primero
+      if (aDestacada && !bDestacada) return -1;
+      if (!aDestacada && bDestacada) return 1;
       
-      // 2. Criterio de desempate: Si ambos están fijados o ambos no lo están, decide el de más vistas
-      return (b.views || 0) - (a.views || 0);
+      // 2. Criterio de desempate: Si ambas lo están o ninguna, decide la fecha más reciente
+      const fechaA = a.fecha?.toDate ? a.fecha.toDate().getTime() : 0;
+      const fechaB = b.fecha?.toDate ? b.fecha.toDate().getTime() : 0;
+      return fechaB - fechaA;
     });
   }, [noticias]);
 
-  // El primero de la lista ordenada con la nueva prioridad será el destacado (Hero)
+  // El primero de la lista ordenada será el destacado principal (Hero)
   const featured = useMemo(() => {
     return noticiasOrdenadas[0] || null;
   }, [noticiasOrdenadas]);
 
-  // Las secundarias toman los siguientes 4 puestos de la lista ya procesada
+  // Las secundarias toman los siguientes puestos de la lista filtrando el Hero
   const noticiasSecundarias = useMemo(() => {
     if (!noticiasOrdenadas.length) return [];
     const idDestacado = featured?.id;
@@ -179,14 +182,14 @@ export default function Home() {
           }} />
 
           <div style={{ maxWidth: '850px', position: 'relative', zIndex: 3 }}>
-            {/* ETIQUETA DINÁMICA: Cambia visualmente si está fijado */}
+            {/* ETIQUETA DINÁMICA ACTUALIZADA CON LA NUEVA PROPIEDAD */}
             <div style={{ 
               display: 'inline-flex', 
               alignItems: 'center', 
               gap: '8px', 
-              background: featured?.fijado || featured?.isPinned ? 'rgba(234, 179, 8, 0.25)' : 'rgba(59, 130, 246, 0.25)', 
-              border: featured?.fijado || featured?.isPinned ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)', 
-              color: featured?.fijado || featured?.isPinned ? '#facc15' : '#60a5fa', 
+              background: featured?.destacada ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.25)', 
+              border: featured?.destacada ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)', 
+              color: featured?.destacada ? '#10b981' : '#60a5fa', 
               padding: '6px 14px', 
               borderRadius: '20px', 
               fontSize: '11px', 
@@ -199,10 +202,10 @@ export default function Home() {
                 width: '6px', 
                 height: '6px', 
                 borderRadius: '50%', 
-                background: featured?.fijado || featured?.isPinned ? '#eab308' : '#3b82f6', 
+                background: featured?.destacada ? '#10b981' : '#3b82f6', 
                 display: 'inline-block' 
               }} /> 
-              {featured?.fijado || featured?.isPinned ? '📌 Anuncio Fijado' : 'Editorial Destacada'}
+              {featured?.destacada ? '📌 Publicación Fijada' : 'Editorial Destacada'}
             </div>
 
             <h1 style={{ fontSize: isMobile ? '32px' : '52px', margin: '0 0 16px 0', lineHeight: '1.15', fontWeight: '850', color: '#ffffff', letterSpacing: '-1.5px' }}>
@@ -241,9 +244,9 @@ export default function Home() {
               noticiasSecundarias.map(n => (
                 <article key={n.id} className="home-card" style={{ borderRadius: '24px', border: '1px solid var(--border, #e5e7eb)', background: 'var(--bg-secondary, #f9fafb)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow, 0 1px 3px rgba(0,0,0,0.05))', position: 'relative' }}>
                   
-                  {/* Pequeño indicador pin flotante si está fijado pero no alcanzó el Hero */}
-                  {(n.fijado || n.isPinned) && (
-                    <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#eab308', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', zIndex: 5, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  {/* Etiqueta flotante para las secundarias que estén marcadas como destacadas */}
+                  {n.destacada && (
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', background: '#10b981', color: '#fff', padding: '4px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', zIndex: 5, display: 'flex', alignItems: 'center', gap: '3px' }}>
                       📌 Fijado
                     </div>
                   )}

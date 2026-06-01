@@ -69,6 +69,7 @@ export default function Admin() {
                     alignItems: 'center',
                     gap: '12px',
                     borderRadius: '14px',
+                    padding: '14px 16px', // Corrección: Se añade padding inline explícito aquí
                     background: isSelected ? 'var(--accent)' : 'transparent',
                     color: isSelected ? 'var(--button-text)' : 'var(--text-main)',
                     border: 'none',
@@ -101,7 +102,9 @@ export default function Admin() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
             }}
             className="sidebar-logout-btn"
           >
@@ -148,7 +151,6 @@ export default function Admin() {
         }
         .sidebar-btn {
           width: 100%;
-          padding: 14px 16px;
         }
 
         /* Hover states en escritorio */
@@ -188,7 +190,7 @@ export default function Admin() {
           }
           .sidebar-btn {
             justify-content: center;
-            padding: 14px;
+            padding: 14px !important;
           }
           .sidebar-btn:hover {
             transform: scale(1.05);
@@ -230,23 +232,24 @@ export default function Admin() {
           }
           .sidebar-btn {
             flex: 0 0 auto; /* Evita que los botones se achiquen */
-            padding: 10px 14px;
+            padding: 10px 14px !important;
             justify-content: center;
+            width: auto;
           }
           .btn-label {
-            display: inline; /* Recupera el texto al lado del icono para claridad */
+            display: inline !important; /* Recupera el texto al lado del icono para claridad */
             font-size: 13px;
           }
           .sidebar-btn:hover {
             transform: none;
           }
           .sidebar-logout-btn {
-            padding: 10px;
+            padding: 10px !important;
             margin-top: 0 !important;
             width: 100%;
           }
           .logout-label {
-            display: inline;
+            display: inline !important;
           }
           .admin-main {
             padding: 20px 16px;

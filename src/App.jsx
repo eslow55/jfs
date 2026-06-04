@@ -8,12 +8,13 @@ import { TemaProvider } from './contexts/TemaContext';
 // --- IMPORTACIÓN DE COMPONENTES DE LAYOUT ---
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
+import SplashScreen from './components/SplashScreen'; // <-- NUEVA IMPORTACIÓN
 
 // --- IMPORTACIÓN DE PÁGINAS ---
 import Home from './pages/Home';
 import Noticias from './pages/Noticias';
 import NoticiaDetalle from './pages/NoticiaDetalle'; 
-import Foro from './pages/Foro'; /* <--- Importado como Foro */
+import Foro from './pages/Foro'; 
 import Galeria from './pages/Galeria';
 import SobreNosotros from './pages/SobreNosotros'; 
 import Login from './pages/Login';
@@ -112,43 +113,73 @@ function LayoutEstructurado({ children }) {
 
 // --- COMPONENTE ENRUTADOR PRINCIPAL ---
 export default function App() {
+  // 1. ESTADO DE LA PANTALLA DE CARGA CINEMÁTICA
+  const [showSplash, setShowSplash] = useState(() => {
+    return sessionStorage.getItem('hasSeenSplash') !== 'true';
+  });
+
+  // 2. FUNCIÓN PARA DESMONTAR EL SPLASH
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+    sessionStorage.setItem('hasSeenSplash', 'true');
+  };
+
   return (
     <TemaProvider>
       <AuthProvider>
-        <Router>
-          <ScrollToTop />
-          
-          <LayoutEstructurado>
-            <Routes>
-              {/* Rutas Públicas Estándar */}
-              <Route path="/" element={<Home />} />
-              <Route path="/noticias" element={<Noticias />} />
+        {/* 3. LÓGICA CONDICIONAL DE RENDERIZADO */}
+        {showSplash ? (
+          <SplashScreen onComplete={handleSplashComplete} />
+        ) : (
+          <div className="app-content-fade-in">
+            <Router>
+              <ScrollToTop />
               
-              {/* Ruta Dinámica para la Lectura de Crónicas Individuales */}
-              <Route path="/noticias/:id" element={<NoticiaDetalle />} />
-              
-              {/* CORREGIDO AQUÍ: Vinculado correctamente con el componente Foro */}
-              <Route path="/foro" element={<Foro />} />
-              
-              <Route path="/galeria" element={<Galeria />} />
-              <Route path="/SobreNosotros" element={<SobreNosotros />} />
-              <Route path="/login" element={<Login />} />
-              
-              {/* Panel de administración protegido */}
-              <Route path="/admin" element={
-                <RutaProtegida>
-                  <Admin />
-                </RutaProtegida>
-              } />
-              
-              {/* Normalización de Endpoints Antiguos */}
-              <Route path="/chismes" element={<Navigate to="/foro" replace />} />
-              
-              {/* Fallback de Seguridad Absoluta */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </LayoutEstructurado>
-        </Router>
+              <LayoutEstructurado>
+                <Routes>
+                  {/* Rutas Públicas Estándar */}
+                  <Route path="/" element={<Home />} />
+                  <Route path="/noticias" element={<Noticias />} />
+                  
+                  {/* Ruta Dinámica para la Lectura de Crónicas Individuales */}
+                  <Route path="/noticias/:id" element={<NoticiaDetalle />} />
+                  
+                  {/* Vinculado correctamente con el componente Foro */}
+                  <Route path="/foro" element={<Foro />} />
+                  
+                  <Route path="/galeria" element={<Galeria />} />
+                  <Route path="/SobreNosotros" element={<SobreNosotros />} />
+                  <Route path="/login" element={<Login />} />
+                  
+                  {/* Panel de administración protegido */}
+                  <Route path="/admin" element={
+                    <RutaProtegida>
+                      <Admin />
+                    </RutaProtegida>
+                  } />
+                  
+                  {/* Normalización de Endpoints Antiguos */}
+                  <Route path="/chismes" element={<Navigate to="/foro" replace />} />
+                  
+                  {/* Fallback de Seguridad Absoluta */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </LayoutEstructurado>
+            </Router>
+          </div>
+        )}
+
+        {/* 4. ESTILOS DE TRANSICIÓN PARA LA ENTRADA DE LA APP */}
+        <style>{`
+          .app-content-fade-in {
+            animation: appReveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+          }
+          @keyframes appReveal {
+            0% { opacity: 0; transform: scale(0.98); filter: blur(4px); }
+            100% { opacity: 1; transform: scale(1); filter: blur(0); }
+          }
+        `}</style>
+
       </AuthProvider>
     </TemaProvider>
   );

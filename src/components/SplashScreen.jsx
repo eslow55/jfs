@@ -6,10 +6,7 @@ export default function SplashScreen({ onComplete }) {
   const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
-    // 1. Inicia la desaparición total justo cuando la explosión termina (2.9s)
     const fadeTimer = setTimeout(() => setIsFading(true), 2900);
-    
-    // 2. Desmonta el componente y libera el Home (3.5s)
     const completeTimer = setTimeout(() => {
       onComplete();
     }, 3500);
@@ -20,30 +17,28 @@ export default function SplashScreen({ onComplete }) {
     };
   }, [onComplete]);
 
-  // Generamos los indicadores del reloj (01 a 12)
   const clockNumbers = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 
   return (
     <div className={`brutal-cinema-container ${isFading ? 'fade-out' : ''}`}>
       
-      {/* ESCENARIO DEL RELOJ CINEMÁTICO */}
       <div className="netflix-theater">
         <div className="brutal-clock-machinery">
           
-          {/* DIAL NUMÉRICO ENORME */}
+          {/* DIAL NUMÉRICO FLUIDO */}
           <div className="clock-dial">
             {clockNumbers.map((num, index) => (
               <span key={num} style={{ '--index': index }}>{num}</span>
             ))}
           </div>
 
-          {/* LOGO CENTRAL AGRANDADO */}
+          {/* LOGO CENTRAL VECTORIAL */}
           <div className="logo-core">
             <img src={logoDark} className="splash-logo light-only" alt="JFS" />
             <img src={logoLight} className="splash-logo dark-only" alt="JFS" />
           </div>
 
-          {/* MANECILLAS MÁS LARGAS Y PESADAS */}
+          {/* MANECILLAS MATEMÁTICAS */}
           <div className="brutal-hand hand-hour" />
           <div className="brutal-hand hand-minute" />
           <div className="brutal-hand hand-second" />
@@ -52,7 +47,7 @@ export default function SplashScreen({ onComplete }) {
       </div>
 
       <style>{`
-        /* --- ATMÓSFERA ADAPTATIVA DE ALTA GAMA --- */
+        /* --- CONTENEDOR GENERAL --- */
         .brutal-cinema-container {
           position: fixed;
           top: 0; left: 0;
@@ -71,18 +66,20 @@ export default function SplashScreen({ onComplete }) {
           pointer-events: none;
         }
 
-        /* --- PERSPECTIVA NETFLIX 3D --- */
         .netflix-theater {
           perspective: 1400px;
           transform-style: preserve-3d;
         }
 
-        /* --- CONTENEDOR MAQUINARIA (Escala brutal aumentada) --- */
+        /* --- ARQUITECTURA RESPONSIVA CENTRAL --- */
         .brutal-clock-machinery {
           position: relative;
-          /* CAMBIO: De 360px a 500px para una presencia masiva en escritorio */
-          width: 500px; height: 500px;
-          max-width: 92vw; max-height: 92vw; /* Máximo aprovechamiento en móviles */
+          
+          /* LA MAGIA: En pantallas grandes mide 500px, en móviles mide el 85% del ancho de pantalla */
+          --clock-size: min(500px, 85vw);
+          
+          width: var(--clock-size);
+          height: var(--clock-size);
           display: flex;
           justify-content: center;
           align-items: center;
@@ -91,28 +88,28 @@ export default function SplashScreen({ onComplete }) {
           will-change: transform, opacity;
         }
 
-        /* --- DIAL NUMÉRICO GRANDE --- */
+        /* --- DIAL NUMÉRICO AUTOSCALABLE --- */
         .clock-dial {
           position: absolute;
           inset: 0;
           font-family: 'Courier New', Courier, monospace;
           font-weight: 900;
-          /* CAMBIO: Tipografía un poco más grande y ruda */
-          font-size: 16px; 
+          /* El tamaño de la fuente escala en relación al reloj */
+          font-size: calc(var(--clock-size) * 0.034); 
           color: var(--text-muted, #64748b);
         }
 
         .clock-dial span {
           position: absolute;
           top: 50%; left: 50%;
-          /* CAMBIO: Radio expandido de -140px a -200px para abrir el círculo */
+          /* El radio de órbita es exactamente el 40% del tamaño actual del reloj */
           transform: translate(-50%, -50%) 
                      rotate(calc(var(--index) * 30deg)) 
-                     translateY(-200px) 
+                     translateY(calc(var(--clock-size) * -0.4)) 
                      rotate(calc(var(--index) * -30deg));
         }
 
-        /* --- LOGO CENTRAL ESCALADO --- */
+        /* --- LOGO DINÁMICO --- */
         .logo-core {
           position: relative;
           z-index: 10;
@@ -121,14 +118,13 @@ export default function SplashScreen({ onComplete }) {
         }
 
         .splash-logo {
-          /* CAMBIO: De 160px a 230px para que domine el centro del reloj */
-          width: 230px;
-          max-width: 45vw;
+          /* El logo siempre ocupará el 45% del ancho total del reloj */
+          width: calc(var(--clock-size) * 0.45);
           height: auto;
           display: block;
         }
 
-        /* --- MANECILLAS MAXIMIZADAS --- */
+        /* --- MANECILLAS PROPORCIONALES --- */
         .brutal-hand {
           position: absolute;
           bottom: 50%; left: 50%;
@@ -137,46 +133,50 @@ export default function SplashScreen({ onComplete }) {
           will-change: transform;
         }
 
-        /* Horario */
+        /* Horario: Grosor escalado, largo equivalente al 20% del reloj */
         .hand-hour {
-          width: 8px; height: 100px; /* Más grueso y largo */
-          margin-left: -4px;
+          width: calc(var(--clock-size) * 0.016); 
+          height: calc(var(--clock-size) * 0.2); 
+          margin-left: calc(var(--clock-size) * -0.008);
           animation: spinHour 2.4s cubic-bezier(0.77, 0, 0.175, 1) forwards;
         }
 
-        /* Minutero */
+        /* Minutero: Largo equivalente al 30% del reloj */
         .hand-minute {
-          width: 5px; height: 150px; /* Mayor alcance visual */
-          margin-left: -2.5px;
+          width: calc(var(--clock-size) * 0.01); 
+          height: calc(var(--clock-size) * 0.3); 
+          margin-left: calc(var(--clock-size) * -0.005);
           opacity: 0.8;
           animation: spinMinute 2.4s cubic-bezier(0.5, 0, 0.1, 1) forwards;
         }
 
-        /* Segundero Industrial */
+        /* Segundero: Largo extremo hasta el 36% del reloj */
         .hand-second {
-          width: 2px; height: 180px; /* Roza casi el borde de los números */
-          margin-left: -1px;
+          width: calc(var(--clock-size) * 0.004); 
+          height: calc(var(--clock-size) * 0.36); 
+          margin-left: calc(var(--clock-size) * -0.002);
           background-color: var(--accent, #00cc88);
           animation: spinSecond 2.4s cubic-bezier(0.1, 0.8, 0.1, 1) forwards;
         }
 
-        /* Centro del eje */
+        /* Pin central responsivo */
         .brutal-clock-machinery::after {
           content: '';
           position: absolute;
-          width: 12px; height: 12px;
+          width: calc(var(--clock-size) * 0.024);
+          height: calc(var(--clock-size) * 0.024);
           background-color: var(--accent, #00cc88);
-          border: 2.5px solid var(--bg-primary);
+          border: calc(var(--clock-size) * 0.005) solid var(--bg-primary);
           border-radius: 50%;
           z-index: 15;
         }
 
-        /* --- CONTROL DE LOGOS --- */
+        /* --- THEME TOGGLE LOGOS --- */
         .dark-only { display: none; }
         [data-theme="dark"] .dark-only, .dark .dark-only { display: block; }
         [data-theme="dark"] .light-only, .dark .light-only { display: none; }
 
-        /* --- KEYFRAMES CINEMÁTICOS --- */
+        /* --- MAQUINARIA DE ANIMACIONES (KEYFRAMES) --- */
         @keyframes spinHour {
           0% { transform: rotate(0deg); }
           70% { transform: rotate(720deg); }
@@ -218,9 +218,8 @@ export default function SplashScreen({ onComplete }) {
             opacity: 1;
           }
           100% {
-            /* Al ser más grande el contenedor, scale(35) devora el viewport con furia */
-            transform: scale(35) translateZ(900px);
-            filter: blur(30px) brightness(0.1);
+            transform: scale(45) translateZ(1000px);
+            filter: blur(32px) brightness(0.1);
             opacity: 0;
           }
         }
